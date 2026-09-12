@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TencentDB-Agent-Memory Chat</title>
+<script>
+function md5(s){function L(k,d){return(k<<d)|(k>>>(32-d))}function K(G,k){var I,d,F,H,x;F=(G&2147483648);H=(k&2147483648);I=(G&1073741824);d=(k&1073741824);x=(G&1073741823)+(k&1073741823);if(I&d)return(x^2147483648^F^H);if(I|d){if(x&1073741824)return(x^3221225472^F^H);else return(x^1073741824^F^H)}else return(x^F^H)}function aa(a,b,c,d,e,f,G){a=K(a,K(K(b&c|~b&d,e),G));return K(L(a,f),b)}function ba(a,b,c,d,e,f,G){a=K(a,K(K(b&d|c&~d,e),G));return K(L(a,f),b)}function ca(a,b,c,d,e,f,G){a=K(a,K(K(b^c^d,e),G));return K(L(a,f),b)}function da(a,b,c,d,e,f,G){a=K(a,K(K(c^(b|~d),e),G));return K(L(a,f),b)}function ea(G){var k,F=G.length;var x=F+8;var v=(x-(x%64))/64;var I=(v+1)*16;var aa=Array(I-1);var d=0;var H=0;while(H<F){k=(H-(H%4))/4;d=(H%4)*8;aa[k]=(aa[k]|(G.charCodeAt(H)<<d));H++}k=(H-(H%4))/4;d=(H%4)*8;aa[k]=aa[k]|(128<<d);aa[I-2]=F<<3;aa[I-1]=F>>>29;return aa}function B(x){var k="",F="",G,d;for(d=0;d<=3;d++){G=(x>>>(d*8))&255;F="0"+G.toString(16);k=k+F.substr(F.length-2,2)}return k}var C=[];var P,h,E,v,g,Y,X,W,V;var S=7,Q=12,N=17,T=22;var A=5,z=9,y=14,w=20;var o=4,m=11,l=16,j=23;var U=6,F=10,R=15,O=21;s=ea(s);Y=1732584193;X=4023233417;W=2562383102;V=271733878;for(P=0;P<s.length;P+=16){h=Y;E=X;v=W;g=V;Y=aa(Y,X,W,V,s[P+0],S,3614090360);V=aa(V,Y,X,W,s[P+1],Q,3905402710);W=aa(W,V,Y,X,s[P+2],N,606105819);X=aa(X,W,V,Y,s[P+3],T,3250441966);Y=aa(Y,X,W,V,s[P+4],S,4118548399);V=aa(V,Y,X,W,s[P+5],Q,1200080426);W=aa(W,V,Y,X,s[P+6],N,2821735955);X=aa(X,W,V,Y,s[P+7],T,4249261313);Y=aa(Y,X,W,V,s[P+8],S,1770035416);V=aa(V,Y,X,W,s[P+9],Q,2336552879);W=aa(W,V,Y,X,s[P+10],N,4294925233);X=aa(X,W,V,Y,s[P+11],T,2304563134);Y=aa(Y,X,W,V,s[P+12],S,1804603682);V=aa(V,Y,X,W,s[P+13],Q,4254626195);W=aa(W,V,Y,X,s[P+14],N,2792965006);X=aa(X,W,V,Y,s[P+15],T,1236535329);Y=ba(Y,X,W,V,s[P+1],A,4129170786);V=ba(V,Y,X,W,s[P+6],z,3225465664);W=ba(W,V,Y,X,s[P+11],y,643717713);X=ba(X,W,V,Y,s[P+0],w,3921069994);Y=ba(Y,X,W,V,s[P+5],A,3593408605);V=ba(V,Y,X,W,s[P+10],z,38016083);W=ba(W,V,Y,X,s[P+15],y,3634488961);X=ba(X,W,V,Y,s[P+4],w,3889429448);Y=ba(Y,X,W,V,s[P+9],A,568446438);V=ba(V,Y,X,W,s[P+14],z,3275163606);W=ba(W,V,Y,X,s[P+3],y,4107603335);X=ba(X,W,V,Y,s[P+8],w,1163531501);Y=ba(Y,X,W,V,s[P+13],A,2850285829);V=ba(V,Y,X,W,s[P+2],z,4243563512);W=ba(W,V,Y,X,s[P+7],y,1735328473);X=ba(X,W,V,Y,s[P+12],w,2368359562);Y=ca(Y,X,W,V,s[P+5],o,4294588738);V=ca(V,Y,X,W,s[P+8],m,2272392833);W=ca(W,V,Y,X,s[P+11],l,1839030562);X=ca(X,W,V,Y,s[P+14],j,4259657740);Y=ca(Y,X,W,V,s[P+1],o,2763975236);V=ca(V,Y,X,W,s[P+4],m,1272893353);W=ca(W,V,Y,X,s[P+7],l,4139469664);X=ca(X,W,V,Y,s[P+10],j,3200236656);Y=ca(Y,X,W,V,s[P+13],o,681279174);V=ca(V,Y,X,W,s[P+0],m,3936430074);W=ca(W,V,Y,X,s[P+3],l,3572445317);X=ca(X,W,V,Y,s[P+6],j,76029189);Y=ca(Y,X,W,V,s[P+9],o,3654602809);V=ca(V,Y,X,W,s[P+12],m,3873151461);W=ca(W,V,Y,X,s[P+15],l,530742520);X=ca(X,W,V,Y,s[P+2],j,329962864);Y=da(Y,X,W,V,s[P+0],U,4096336452);V=da(V,Y,X,W,s[P+7],F,1126891415);W=da(W,V,Y,X,s[P+14],R,2878612391);X=da(X,W,V,Y,s[P+5],O,4237533241);Y=da(Y,X,W,V,s[P+12],U,1700485571);V=da(V,Y,X,W,s[P+3],F,2399980690);W=da(W,V,Y,X,s[P+10],R,4293915773);X=da(X,W,V,Y,s[P+1],O,2240044497);Y=da(Y,X,W,V,s[P+8],U,1873313359);V=da(V,Y,X,W,s[P+15],F,4264355552);W=da(W,V,Y,X,s[P+6],R,2734768916);X=da(X,W,V,Y,s[P+13],O,1309151649);Y=da(Y,X,W,V,s[P+4],U,4149444226);V=da(V,Y,X,W,s[P+11],F,3174756917);W=da(W,V,Y,X,s[P+2],R,718787259);X=da(X,W,V,Y,s[P+9],O,3951481745);Y=K(Y,h);X=K(X,E);W=K(W,v);V=K(V,g)}return(B(Y)+B(X)+B(W)+B(V)).toLowerCase()}
+</script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f0f; color: #e0e0e0; height: 100vh; display: flex; flex-direction: column; }
+
+  /* Login overlay */
+  .login-overlay { position: fixed; inset: 0; background: #0a0a14; display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .login-box { background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 16px; padding: 32px; width: 360px; text-align: center; }
+  .login-box h2 { font-size: 20px; margin-bottom: 8px; color: #fff; }
+  .login-box p { font-size: 13px; color: #888; margin-bottom: 20px; }
+  .login-box input { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #333; background: #0f0f1a; color: #e0e0e0; font-size: 15px; outline: none; margin-bottom: 16px; }
+  .login-box input:focus { border-color: #667eea; }
+  .login-box input::placeholder { color: #555; }
+  .login-box button { width: 100%; padding: 12px; border-radius: 10px; border: none; background: #667eea; color: white; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+  .login-box button:hover { background: #5a6fd6; }
+  .login-box .hint { font-size: 11px; color: #555; margin-top: 12px; }
+
+  .header { background: #1a1a2e; padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #2a2a4a; }
+  .header .logo { width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; color: white; }
+  .header .title { flex: 1; }
+  .header .title h1 { font-size: 16px; font-weight: 600; color: #fff; }
+  .header .title p { font-size: 12px; color: #888; margin-top: 2px; }
+  .header .user-badge { display: flex; align-items: center; gap: 8px; }
+  .header .user-badge span { font-size: 12px; color: #a78bfa; background: #1e1e2e; padding: 4px 10px; border-radius: 8px; border: 1px solid #333; }
+  .header .user-badge button { font-size: 11px; padding: 4px 8px; border-radius: 6px; border: 1px solid #444; background: transparent; color: #888; cursor: pointer; }
+  .header .user-badge button:hover { color: #f87171; border-color: #f87171; }
+  .header .status { display: flex; gap: 8px; }
+  .header .status span { font-size: 11px; padding: 3px 8px; border-radius: 12px; background: #1e3a1e; color: #4ade80; }
+  .header .status span.off { background: #3a1e1e; color: #f87171; }
+
+  .chat-container { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+  .chat-container::-webkit-scrollbar { width: 6px; }
+  .chat-container::-webkit-scrollbar-track { background: transparent; }
+  .chat-container::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+  .message { display: flex; gap: 10px; max-width: 85%; animation: fadeIn 0.3s ease; }
+  .message.user { align-self: flex-end; flex-direction: row-reverse; }
+  .message.assistant { align-self: flex-start; }
+  .message.system { align-self: center; max-width: 90%; }
+
+  .message .avatar { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .message.user .avatar { background: #2563eb; }
+  .message.assistant .avatar { background: #7c3aed; }
+  .message.system .avatar { background: #374151; width: 24px; height: 24px; font-size: 11px; }
+
+  .message .bubble { padding: 10px 14px; border-radius: 14px; line-height: 1.6; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+  .message.user .bubble { background: #2563eb; color: white; border-bottom-right-radius: 4px; }
+  .message.assistant .bubble { background: #1e1e2e; border: 1px solid #2a2a4a; border-bottom-left-radius: 4px; }
+  .message.system .bubble { background: #1a2332; border: 1px solid #2a3a4a; color: #94a3b8; font-size: 13px; border-radius: 10px; }
+
+  .steps { margin-top: 8px; padding: 8px 10px; background: #111118; border-radius: 8px; border: 1px solid #222; }
+  .steps summary { font-size: 12px; color: #888; cursor: pointer; user-select: none; }
+  .steps summary:hover { color: #aaa; }
+  .steps .step { font-size: 12px; color: #666; padding: 3px 0; border-bottom: 1px solid #1a1a1a; display: flex; gap: 6px; }
+  .steps .step:last-child { border-bottom: none; }
+  .steps .step .tool-name { color: #a78bfa; font-weight: 500; white-space: nowrap; }
+  .steps .step .tool-result { color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 400px; }
+
+  .typing { display: flex; gap: 4px; padding: 12px 16px; }
+  .typing span { width: 8px; height: 8px; background: #666; border-radius: 50%; animation: bounce 1.4s infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-8px); } }
+
+  .input-area { padding: 16px 20px; background: #1a1a2e; border-top: 1px solid #2a2a4a; }
+  .input-row { display: flex; gap: 10px; align-items: flex-end; }
+  .input-row textarea { flex: 1; background: #0f0f1a; border: 1px solid #333; border-radius: 12px; padding: 10px 14px; color: #e0e0e0; font-size: 14px; font-family: inherit; resize: none; outline: none; min-height: 44px; max-height: 120px; line-height: 1.5; }
+  .input-row textarea:focus { border-color: #667eea; }
+  .input-row textarea::placeholder { color: #555; }
+  .input-row button { width: 44px; height: 44px; border-radius: 12px; border: none; background: #667eea; color: white; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; flex-shrink: 0; }
+  .input-row button:hover { background: #5a6fd6; }
+  .input-row button:disabled { background: #333; cursor: not-allowed; }
+  .footer-note { text-align: center; font-size: 11px; color: #444; margin-top: 8px; }
+
+  /* Memory modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 900; display: none; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #1a1a2e; border: 1px solid #2a2a4a; border-radius: 16px; width: 720px; max-height: 85vh; display: flex; flex-direction: column; }
+  .modal-header { padding: 16px 20px; border-bottom: 1px solid #2a2a4a; display: flex; align-items: center; justify-content: space-between; }
+  .modal-header h2 { font-size: 16px; color: #fff; }
+  .modal-close { background: none; border: none; color: #888; font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+  .modal-close:hover { color: #f87171; background: #2a1e1e; }
+  .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+  .modal-body::-webkit-scrollbar { width: 6px; }
+  .modal-body::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+  .mem-section { margin-bottom: 20px; }
+  .mem-section h3 { font-size: 13px; color: #a78bfa; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #2a2a4a; }
+  .mem-section .count { font-size: 11px; color: #666; font-weight: normal; text-transform: none; letter-spacing: 0; }
+  .mem-item { background: #111118; border: 1px solid #222; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px; line-height: 1.5; }
+  .mem-item .tag { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-right: 6px; font-weight: 600; }
+  .mem-item .tag.persona { background: #1e3a5e; color: #60a5fa; }
+  .mem-item .tag.episodic { background: #1e3a1e; color: #4ade80; }
+  .mem-item .tag.instruction { background: #3a2e1e; color: #fbbf24; }
+  .mem-item .tag.user { background: #2563eb22; color: #60a5fa; }
+  .mem-item .tag.assistant { background: #7c3aed22; color: #a78bfa; }
+  .mem-item .content { color: #ccc; }
+  .mem-item .meta { color: #555; font-size: 11px; margin-top: 4px; }
+  .mem-persona { background: #111118; border: 1px solid #222; border-radius: 8px; padding: 14px; font-size: 13px; line-height: 1.7; color: #ccc; white-space: pre-wrap; max-height: 300px; overflow-y: auto; }
+  .mem-empty { color: #555; font-size: 13px; font-style: italic; }
+  .btn-memory { font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid #444; background: transparent; color: #a78bfa; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+  .btn-memory:hover { border-color: #a78bfa; background: #1e1e2e; }
+
+  /* Edit mode styles */
+  .mem-edit-btn { font-size: 10px; padding: 2px 8px; border-radius: 4px; border: 1px solid #444; background: transparent; color: #888; cursor: pointer; margin-left: 8px; }
+  .mem-edit-btn:hover { border-color: #667eea; color: #667eea; }
+  .mem-delete-btn { font-size: 10px; padding: 2px 8px; border-radius: 4px; border: 1px solid #444; background: transparent; color: #888; cursor: pointer; margin-left: 4px; }
+  .mem-delete-btn:hover { border-color: #f87171; color: #f87171; }
+  .mem-save-btn { font-size: 11px; padding: 4px 12px; border-radius: 6px; border: none; background: #667eea; color: white; cursor: pointer; margin-right: 6px; }
+  .mem-save-btn:hover { background: #5a6fd6; }
+  .mem-cancel-btn { font-size: 11px; padding: 4px 12px; border-radius: 6px; border: 1px solid #444; background: transparent; color: #888; cursor: pointer; }
+  .mem-cancel-btn:hover { color: #ccc; border-color: #666; }
+  .mem-edit-textarea { width: 100%; min-height: 120px; background: #0f0f1a; border: 1px solid #333; border-radius: 8px; padding: 10px; color: #e0e0e0; font-size: 13px; font-family: inherit; line-height: 1.6; resize: vertical; outline: none; }
+  .mem-edit-textarea:focus { border-color: #667eea; }
+  .mem-edit-actions { display: flex; gap: 6px; margin-top: 8px; justify-content: flex-end; }
+  .mem-edit-label { font-size: 11px; color: #666; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<!-- Login Overlay -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h2>Agent Chat</h2>
+    <p>输入你的名字开始对话，系统会为你记住专属记忆</p>
+    <input type="text" id="loginName" placeholder="你的名字（如：张三）" autofocus
+           onkeydown="if(event.key==='Enter')login()">
+    <button onclick="login()">进入</button>
+    <div class="hint">不同名字 = 不同记忆空间，互相隔离</div>
+  </div>
+</div>
+
+<div class="header" id="headerBar" style="display:none">
+  <div class="logo">M</div>
+  <div class="title">
+    <h1>Agent Chat</h1>
+    <p>LangGraph + Memory + MCP + DashScope</p>
+  </div>
+  <div class="user-badge">
+    <button class="btn-memory" onclick="openMemory()">Memory</button>
+    <span id="userLabel"></span>
+    <button onclick="logout()">切换</button>
+  </div>
+  <div class="status">
+    <span id="status-mem">Memory</span>
+    <span id="status-mcp">MCP</span>
+    <span id="status-llm">LLM</span>
+  </div>
+</div>
+
+<div class="chat-container" id="chat">
+  <div class="message system">
+    <div class="avatar">i</div>
+    <div class="bubble" id="welcomeMsg">请先登录开始对话。</div>
+  </div>
+</div>
+
+<div class="input-area" id="inputArea" style="display:none">
+  <div class="input-row">
+    <textarea id="input" placeholder="Type your message..." rows="1"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"></textarea>
+    <button id="sendBtn" onclick="send()">&#9654;</button>
+  </div>
+  <div class="footer-note">Powered by LangGraph ReAct Agent &middot; TencentDB-Agent-Memory &middot; DashScope Qwen</div>
+</div>
+
+<!-- Memory Modal -->
+<div class="modal-overlay" id="memoryModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">Memory</h2>
+      <button class="modal-close" onclick="closeMemory()">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody">
+      <div style="text-align:center;color:#666;padding:40px;">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const chat = document.getElementById('chat');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+let threadId = null;
+let sending = false;
+let userId = null;
+
+// Auto-resize textarea
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+});
+
+// Check health
+fetch('/api/health').then(r => r.json()).then(d => {
+  document.getElementById('status-mem').className = d.memory ? '' : 'off';
+  document.getElementById('status-mcp').className = d.mcp ? '' : 'off';
+  document.getElementById('status-llm').className = d.llm ? '' : 'off';
+}).catch(() => {
+  document.querySelectorAll('.status span').forEach(s => s.className = 'off');
+});
+
+function login() {
+  const name = document.getElementById('loginName').value.trim();
+  if (!name) return;
+  // MD5 hash name to ASCII-safe user_id
+  userId = 'usr-' + md5(name);
+  displayName = name;
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('headerBar').style.display = 'flex';
+  document.getElementById('inputArea').style.display = 'block';
+  document.getElementById('userLabel').textContent = name;
+  document.getElementById('welcomeMsg').textContent = `你好 ${name}！我是你的专属 AI 助手，可以搜索你的记忆、对话历史和知识库。`;
+  input.focus();
+}
+
+function logout() {
+  userId = null;
+  threadId = null;
+  chat.innerHTML = `<div class="message system">
+    <div class="avatar">i</div>
+    <div class="bubble">已切换用户。请重新输入名字登录。</div>
+  </div>`;
+  document.getElementById('loginOverlay').style.display = 'flex';
+  document.getElementById('headerBar').style.display = 'none';
+  document.getElementById('inputArea').style.display = 'none';
+  document.getElementById('loginName').value = '';
+  document.getElementById('loginName').focus();
+}
+
+function addMessage(role, content, steps) {
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+
+  const avatarText = role === 'user' ? userId ? userId.replace('usr-','')[0].toUpperCase() : 'U' : role === 'assistant' ? 'A' : 'i';
+  let stepsHtml = '';
+  if (steps && steps.length > 0) {
+    const stepItems = steps.map(s => {
+      const name = s.tool || '?';
+      const result = s.result ? `<span class="tool-result">${escHtml(s.result)}</span>` : '';
+      return `<div class="step"><span class="tool-name">${escHtml(name)}</span>${result}</div>`;
+    }).join('');
+    stepsHtml = `<div class="steps"><details><summary>${steps.length} tool call(s)</summary>${stepItems}</details></div>`;
+  }
+
+  div.innerHTML = `<div class="avatar">${avatarText}</div><div><div class="bubble">${escHtml(content)}</div>${stepsHtml}</div>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function addTyping() {
+  const div = document.createElement('div');
+  div.className = 'message assistant';
+  div.id = 'typing';
+  div.innerHTML = `<div class="avatar">A</div><div class="typing"><span></span><span></span><span></span></div>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function send() {
+  const msg = input.value.trim();
+  if (!msg || sending || !userId) return;
+  sending = true;
+  sendBtn.disabled = true;
+  input.value = '';
+  input.style.height = 'auto';
+
+  addMessage('user', msg);
+  const typing = addTyping();
+
+  try {
+    const resp = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, thread_id: threadId, user_id: displayName }),
+    });
+    const data = await resp.json();
+    typing.remove();
+
+    if (data.error) {
+      addMessage('system', `Error: ${data.error}`);
+    } else {
+      threadId = data.thread_id;
+      addMessage('assistant', data.response || '(no response)', data.steps);
+    }
+  } catch (e) {
+    typing.remove();
+    addMessage('system', `Network error: ${e.message}`);
+  } finally {
+    sending = false;
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+// ── Memory Modal ──
+async function openMemory() {
+  if (!userId) return;
+  const modal = document.getElementById('memoryModal');
+  const body = document.getElementById('modalBody');
+  const title = document.getElementById('modalTitle');
+  title.textContent = `Memory - ${document.getElementById('userLabel').textContent}`;
+  body.innerHTML = '<div style="text-align:center;color:#666;padding:40px;">Loading...</div>';
+  modal.classList.add('open');
+
+  try {
+    const resp = await fetch('/api/memory', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: displayName }),
+    });
+    const data = await resp.json();
+    if (data.error) { body.innerHTML = `<div class="mem-empty">${escHtml(data.error)}</div>`; return; }
+    renderMemory(data);
+  } catch (e) {
+    body.innerHTML = `<div class="mem-empty">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function closeMemory() {
+  document.getElementById('memoryModal').classList.remove('open');
+}
+
+document.getElementById('memoryModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeMemory();
+});
+
+function renderMemory(data) {
+  const body = document.getElementById('modalBody');
+  window._memData = data;
+  let html = '';
+
+  // Persona
+  html += `<div class="mem-section"><h3>Persona <span class="count">${data.persona ? data.persona.length + ' chars' : 'empty'}</span>`;
+  html += `<button class="mem-edit-btn" onclick="editPersona()">Edit</button></h3>`;
+  if (data.persona) {
+    html += `<div class="mem-persona">${escHtml(data.persona)}</div>`;
+  } else {
+    html += `<div class="mem-empty">No persona yet</div>`;
+  }
+  html += '</div>';
+
+  // Memories
+  html += `<div class="mem-section"><h3>Memories <span class="count">${data.memories.length} items</span></h3>`;
+  if (data.memories.length === 0) {
+    html += `<div class="mem-empty">No memories extracted yet</div>`;
+  }
+  for (let i = 0; i < data.memories.length; i++) {
+    const m = data.memories[i];
+    const type = m.type || '?';
+    const id = m.id || '';
+    html += `<div class="mem-item" id="mem-item-${id}">`;
+    html += `<span class="tag ${type}">${escHtml(type)}</span>`;
+    html += `<span class="content">${escHtml(m.content || '')}</span>`;
+    html += `<button class="mem-edit-btn" onclick="editMemory(${i})">Edit</button>`;
+    if (m.background) html += `<div class="meta">${escHtml(m.background)}</div>`;
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Conversations (read-only)
+  const userMsgs = data.conversations.filter(m => m.role === 'user');
+  const asstMsgs = data.conversations.filter(m => m.role === 'assistant');
+  html += `<div class="mem-section"><h3>Conversations <span class="count">${data.conversations.length} total (${userMsgs.length} user, ${asstMsgs.length} assistant)</span></h3>`;
+  if (data.conversations.length === 0) {
+    html += `<div class="mem-empty">No conversations yet</div>`;
+  }
+  for (const m of data.conversations.slice(0, 20)) {
+    const role = m.role || '?';
+    html += `<div class="mem-item"><span class="tag ${role}">${escHtml(role)}</span><span class="content">${escHtml((m.content || '').substring(0, 200))}</span>`;
+    if (m.timestamp) html += `<div class="meta">${escHtml(m.timestamp)}</div>`;
+    html += '</div>';
+  }
+  if (data.conversations.length > 20) {
+    html += `<div class="mem-empty">... and ${data.conversations.length - 20} more</div>`;
+  }
+  html += '</div>';
+
+  // Scenarios
+  html += `<div class="mem-section"><h3>Scenarios <span class="count">${data.scenarios.length} files</span></h3>`;
+  if (data.scenarios.length === 0) {
+    html += `<div class="mem-empty">No scenarios yet</div>`;
+  }
+  for (let i = 0; i < data.scenarios.length; i++) {
+    const s = data.scenarios[i];
+    html += `<div class="mem-item">`;
+    html += `<span class="content"><strong>${escHtml(s.path || '')}</strong>: ${escHtml(s.summary || '')}</span>`;
+    html += `<button class="mem-edit-btn" onclick="editScenario(${i})">Edit</button>`;
+    html += '</div>';
+  }
+  html += '</div>';
+
+  body.innerHTML = html;
+}
+
+// ── Memory Edit Functions ──
+async function savePersona() {
+  const ta = document.getElementById('personaEditor');
+  if (!ta) return;
+  const content = ta.value;
+  try {
+    const resp = await fetch('/api/memory/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: displayName, type: 'persona', content }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      openMemory();
+    } else {
+      alert('Save failed: ' + (data.error || 'unknown'));
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+function cancelEditPersona() {
+  openMemory();
+}
+
+function editPersona() {
+  const content = (window._memData && window._memData.persona) || '';
+  const body = document.getElementById('modalBody');
+  const html = `
+    <div class="mem-section">
+      <h3>Persona</h3>
+      <textarea id="personaEditor" class="mem-edit-textarea">${escHtml(content)}</textarea>
+      <div class="mem-edit-actions">
+        <button class="mem-cancel-btn" onclick="cancelEditPersona()">Cancel</button>
+        <button class="mem-save-btn" onclick="savePersona()">Save</button>
+      </div>
+    </div>`;
+  body.innerHTML = html;
+}
+
+async function saveMemory(idx) {
+  const m = window._memData.memories[idx];
+  if (!m) return;
+  const contentEl = document.getElementById('mem-content-' + idx);
+  const bgEl = document.getElementById('mem-bg-' + idx);
+  if (!contentEl) return;
+  try {
+    const resp = await fetch('/api/memory/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: displayName, type: 'memory', id: m.id,
+        content: contentEl.value,
+        background: bgEl ? bgEl.value : '',
+      }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      openMemory();
+    } else {
+      alert('Save failed: ' + (data.error || 'unknown'));
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function deleteMemory(idx) {
+  const m = window._memData.memories[idx];
+  if (!m) return;
+  if (!confirm('Delete this memory?')) return;
+  try {
+    const resp = await fetch('/api/memory/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: displayName, type: 'memory', id: m.id }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      openMemory();
+    } else {
+      alert('Delete failed: ' + (data.error || 'unknown'));
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+function editMemory(idx) {
+  const m = window._memData.memories[idx];
+  if (!m) return;
+  const el = document.getElementById('mem-item-' + m.id);
+  if (!el) return;
+  el.innerHTML = `
+    <div class="mem-edit-label">Content:</div>
+    <textarea id="mem-content-${idx}" class="mem-edit-textarea" style="min-height:60px">${escHtml(m.content || '')}</textarea>
+    <div class="mem-edit-label" style="margin-top:6px">Background:</div>
+    <textarea id="mem-bg-${idx}" class="mem-edit-textarea" style="min-height:40px">${escHtml(m.background || '')}</textarea>
+    <div class="mem-edit-actions">
+      <button class="mem-cancel-btn" onclick="openMemory()">Cancel</button>
+      <button class="mem-delete-btn" onclick="deleteMemory(${idx})" style="margin-right:auto">Delete</button>
+      <button class="mem-save-btn" onclick="saveMemory(${idx})">Save</button>
+    </div>`;
+}
+
+function cancelEditScenario() {
+  openMemory();
+}
+
+async function saveScenario(idx) {
+  const s = window._memData.scenarios[idx];
+  if (!s) return;
+  const ta = document.getElementById('scenarioEditor');
+  const summaryEl = document.getElementById('scenarioSummary');
+  if (!ta) return;
+  try {
+    const resp = await fetch('/api/memory/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_id: displayName, type: 'scenario', path: s.path,
+        content: ta.value,
+        summary: summaryEl ? summaryEl.value : '',
+      }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      openMemory();
+    } else {
+      alert('Save failed: ' + (data.error || 'unknown'));
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function editScenario(idx) {
+  const s = window._memData.scenarios[idx];
+  if (!s) return;
+  const body = document.getElementById('modalBody');
+  body.innerHTML = '<div style="text-align:center;color:#666;padding:40px;">Loading...</div>';
+  try {
+    const resp = await fetch('/api/memory/scenario', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: displayName, path: s.path }),
+    });
+    const data = await resp.json();
+    const content = data.content || '';
+    const summary = data.summary || '';
+    const html = `
+      <div class="mem-section">
+        <h3>Scenario: ${escHtml(s.path)}</h3>
+        <div class="mem-edit-label">Summary:</div>
+        <input id="scenarioSummary" value="${escHtml(summary)}" style="width:100%;padding:8px;border-radius:6px;border:1px solid #333;background:#0f0f1a;color:#e0e0e0;font-size:13px;margin-bottom:8px;outline:none;">
+        <div class="mem-edit-label">Content (Markdown):</div>
+        <textarea id="scenarioEditor" class="mem-edit-textarea" style="min-height:300px">${escHtml(content)}</textarea>
+        <div class="mem-edit-actions">
+          <button class="mem-cancel-btn" onclick="cancelEditScenario()">Cancel</button>
+          <button class="mem-save-btn" onclick="saveScenario(${idx})">Save</button>
+        </div>
+      </div>`;
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = `<div class="mem-empty">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+input.focus();
+</script>
+</body>
+</html>

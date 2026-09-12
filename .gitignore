@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# 本机密钥与自动生成文件（勿提交）
+deploy/.env
+deploy/.admin-key
+deploy/tdai-gateway.yaml
+deploy/.memory-core-config/
+deploy/.memory-core-patches/
+
+# Docker 镜像
+*.tar.gz
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Node
+node_modules/
+
+# 日志
+logs/
+*.log
