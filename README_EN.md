@@ -229,21 +229,7 @@ The container must run with `STORE_MODE=postgres`, injected automatically by
 | `manifest.ts` | `/app/src/utils/manifest.ts` | `StoreConfigSnapshot` and `ManifestStoreInfo` types add postgres |
 | `server.ts` | `/app/src/gateway/server.ts` | `STORE_MODE` env var check adds `"postgres"` |
 
-### 5.2 Bug fix log
-
-Bugs discovered after `pg-store.ts` was written, and their fixes:
-
-| # | Bug | Cause | Fix | Script |
-|---|-----|-------|-----|--------|
-| 1 | `require is not defined` | tsx ESM mode does not support `require("pg")` | Changed to `import { Pool } from "pg"` | `fix-pg-import.cjs` |
-| 2 | `LIMIT must be type bigint, not text` | PG parameterized LIMIT needs a type cast | Added `::int` to every LIMIT `$N` | `fix-limit.cjs` + `fix-limit2.cjs` |
-| 3 | `could not determine data type of parameter $2` | `buildIsoClause(filter, 2)` skipped `$2`, leaving an empty parameter | Changed to `buildIsoClause(filter, 1)` | `fix-params.cjs` |
-| 4 | Vector search type inference failure | `$1` type unknown in `embedding <=> $1` | Added `::vector` cast | `fix-params.cjs` |
-| 5 | `Invalid time value` | PG `bigint` returned as string; `new Date("123")` is invalid | Convert with `Number(row.timestamp)` | `fix-timestamp.cjs` + `fix-timestamp2.cjs` |
-| 6 | sendDimensions hotfix syntax error | `#` is a shell comment, not a TS comment | Changed to `//` | edit `start-memory-core.sh` |
-| 7 | File encoding error | PowerShell downloaded files as UTF-16LE | Converted to UTF-8 with Python | `fix-encoding.py` (temporary) |
-
-### 5.3 Patch application flow
+### 5.2 Patch application flow
 
 `start-memory-core.sh` execution order:
 
@@ -389,4 +375,3 @@ Edit `.env` or `start-memory-core.sh`:
 | Node.js (in container) | v22.23.2 |
 | tsx | ESM mode |
 | pg npm package | latest |
-| Doc date | 2026-08-27 (sanitized for open source 2026-09-12) |

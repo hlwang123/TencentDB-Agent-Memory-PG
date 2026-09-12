@@ -222,21 +222,7 @@ memory:
 | `manifest.ts` | `/app/src/utils/manifest.ts` | `StoreConfigSnapshot` 和 `ManifestStoreInfo` 类型加 postgres |
 | `server.ts` | `/app/src/gateway/server.ts` | `STORE_MODE` env var 检查加 `"postgres"` |
 
-### 5.2 Bug 修复清单
-
-以下是 `pg-store.ts` 创建后发现的 bug 及修复：
-
-| # | Bug | 原因 | 修复 | 脚本 |
-|---|-----|------|------|------|
-| 1 | `require is not defined` | tsx ESM 模式不支持 `require("pg")` | 改为 `import { Pool } from "pg"` | `fix-pg-import.cjs` |
-| 2 | `LIMIT must be type bigint, not text` | PG 参数化 LIMIT 需要类型 cast | 所有 LIMIT `$N` 加 `::int` | `fix-limit.cjs` + `fix-limit2.cjs` |
-| 3 | `could not determine data type of parameter $2` | `buildIsoClause(filter, 2)` 跳过了 `$2`，导致空参数 | 改为 `buildIsoClause(filter, 1)` | `fix-params.cjs` |
-| 4 | 向量搜索类型推断失败 | `embedding <=> $1` 中 `$1` 类型未知 | 加 `::vector` cast | `fix-params.cjs` |
-| 5 | `Invalid time value` | PG `bigint` 返回为字符串，`new Date("123")` 无效 | `Number(row.timestamp)` 转换 | `fix-timestamp.cjs` + `fix-timestamp2.cjs` |
-| 6 | sendDimensions hotfix 语法错误 | `#` 是 shell 注释不是 TS 注释 | 改为 `//` | 修改 `start-memory-core.sh` |
-| 7 | 文件编码错误 | PowerShell 下载文件为 UTF-16LE | 用 Python 转换为 UTF-8 | `fix-encoding.py` (临时) |
-
-### 5.3 补丁应用流程
+### 5.2 补丁应用流程
 
 `start-memory-core.sh` 执行顺序：
 
@@ -374,4 +360,3 @@ p.query('SELECT COUNT(*) FROM l1_records').then(r=>{console.log('L1:',r.rows[0].
 | Node.js (容器内) | v22.23.2 |
 | tsx | ESM 模式 |
 | pg npm 包 | 最新版 |
-| 文档生成日期 | 2026-08-27（2026-09-12 开源脱敏修订） |
