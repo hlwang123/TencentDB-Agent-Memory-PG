@@ -56,16 +56,22 @@
 TAM/
 ├── README.md / README_EN.md           ← 本文档（中文 / English）
 ├── LICENSE / NOTICE                   ← MIT 许可 + 上游衍生说明
+├── docs/
+│   └── tam-pg-support.md              ← TAM 特性介绍与 PostgreSQL 支持说明
 ├── src/                               ← 从容器提取的已修补源码
 │   ├── config.ts                      ← StoreBackend 类型 + PostgresConfig + 配置解析
 │   ├── gateway/
 │   │   └── server.ts                  ← STORE_MODE 环境变量检查
 │   ├── utils/
 │   │   └── manifest.ts                ← StoreConfigSnapshot + ManifestStoreInfo 类型
-│   └── core/store/
-│       ├── pg-store.ts                ← ★ 新增：PG 存储实现 (IMemoryStore 接口)
-│       ├── factory.ts                 ← createStoreBundle 加 postgres case
-│       └── store-pool.ts              ← StoreMode + createPostgresStore + getStore 分支
+│   ├── core/
+│   │   ├── tdai-core.ts               ← ★ 修改：Skill wiring 增加 getPgPool() 分支
+│   │   ├── skill/
+│   │   │   └── pg-skill-store.ts      ← ★ 新增：Skill 数据层 PG 实现
+│   │   └── store/
+│   │       ├── pg-store.ts            ← ★ 新增：PG 存储实现 (IMemoryStore + getPgPool 逃生舱)
+│   │       ├── factory.ts             ← createStoreBundle 加 postgres case
+│   │       └── store-pool.ts          ← StoreMode + createPostgresStore + getStore 分支
 ├── patches/                           ← 补丁文件 + 打补丁脚本
 │   ├── pg-store.ts                    ← 同 src/core/store/pg-store.ts (部署用)
 │   ├── config.ts                      ← 同 src/config.ts (部署用)
@@ -73,6 +79,8 @@ TAM/
 │   ├── store-pool.ts                  ← 同 src/core/store/store-pool.ts (部署用)
 │   ├── manifest.ts                    ← 同 src/utils/manifest.ts (部署用)
 │   ├── server.ts                      ← 同 src/gateway/server.ts (部署用)
+│   ├── tdai-core.ts                   ← 同 src/core/tdai-core.ts (部署用)
+│   ├── pg-skill-store.ts              ← 同 src/core/skill/pg-skill-store.ts (部署用)
 │   ├── pg-store-original.ts           ← 原始合并版 pg-store.ts (未应用 bugfix)
 │   ├── patch-all.js                   ← 主补丁脚本 (config/factory/store-pool)
 │   ├── fix-factory.js                 ← factory.ts postgres case 插入
@@ -87,22 +95,26 @@ TAM/
 │   ├── fix-timestamp2.cjs             ← 修复 ?? 0 模式的 timestamp
 │   ├── fix-yaml.py                    ← YAML 配置修复脚本
 │   └── create-db.js                   ← PG 数据库创建脚本 (读 PG_CONNECTION_STRING)
-└── deploy/                            ← 部署脚本
-    ├── .env.example                   ← 环境变量模板 (复制为 .env 后填写)
-    ├── start-all.sh                   ← 启动全部服务
-    ├── start-memory-core.sh           ← ★ 启动 memory-core (已修改支持 PG)
-    ├── start-memory-hub.sh            ← 启动 panel UI
-    ├── start-proxy.sh                 ← 启动 proxy
-    ├── stop-all.sh                    ← 停止全部服务
-    ├── apply-pg-patches.sh            ← ★ 自动应用 PG 迁移补丁
-    ├── _lib.sh                        ← 部署库函数
-    └── verify.sh                      ← 部署验证脚本
+├── deploy/                            ← 部署脚本
+│   ├── .env.example                   ← 环境变量模板 (复制为 .env 后填写)
+│   ├── start-all.sh                   ← 启动全部服务
+│   ├── start-memory-core.sh           ← ★ 启动 memory-core (已修改支持 PG)
+│   ├── start-memory-hub.sh            ← 启动 panel UI
+│   ├── start-proxy.sh                 ← 启动 proxy
+│   ├── stop-all.sh                    ← 停止全部服务
+│   ├── apply-pg-patches.sh            ← ★ 自动应用 PG 迁移补丁 (8 个文件)
+│   ├── _lib.sh                        ← 部署库函数
+│   └── verify.sh                      ← 部署验证脚本
 ├── db/
 │   └── schema.sql                     ← PG 数据库 DDL (9 张表 + 索引)
-└── scripts/                           ← 演示应用
+├── skill-align/                       ← ★ Skill 模块 PG 对齐验证套件 (E2E/冒烟脚本)
+├── example/                           ← TAM 记忆 Agent 演示应用 (FastAPI + LangGraph + Web)
+└── scripts/                           ← 测试/演示脚本
     ├── memory_client.py               ← Memory V2 API 客户端
-    ├── main.py                        ← LangGraph Chat Agent (配置读环境变量)
-    └── index.html                     ← 聊天 Web 界面
+    ├── main.py                        ← LangGraph Chat Agent (TAM + Skill-Hub 双记忆)
+    ├── index.html                     ← 聊天 Web 界面
+    ├── test_pg_e2e.py                 ← PG 端到端测试 (配置读环境变量)
+    └── test_search.py                 ← 搜索测试 (配置读环境变量)
 ```
 
 > 注：`.env`、`.admin-key`、`tdai-gateway.yaml` 含本机密钥，不入库（见 `.gitignore`），
@@ -211,18 +223,47 @@ memory:
 
 ## 5. 补丁详情
 
-### 5.1 修改的源文件 (6 个)
+### 5.1 修改的源文件 (8 个)
 
 | 文件 | 容器路径 | 修改内容 |
 |------|----------|----------|
-| `pg-store.ts` | `/app/src/core/store/pg-store.ts` | **新增**：PG 存储实现，~670 行，实现完整 `IMemoryStore` 接口 |
+| `pg-store.ts` | `/app/src/core/store/pg-store.ts` | **新增**：PG 存储实现，~670 行，实现完整 `IMemoryStore` 接口；新增 `getPgPool()` 逃生舱（暴露连接池 + 维度，供 Skill 模块复用） |
 | `config.ts` | `/app/src/config.ts` | `StoreBackend` 类型加 `"postgres"`；新增 `PostgresConfig` 接口；配置解析加 `postgres` 字段 |
 | `factory.ts` | `/app/src/core/store/factory.ts` | `createStoreBundle` switch 加 `case "postgres"` |
 | `store-pool.ts` | `/app/src/core/store/store-pool.ts` | `StoreMode` 加 `"postgres"`；新增 `createPostgresStore()` 方法；`getStore` 分支处理 |
 | `manifest.ts` | `/app/src/utils/manifest.ts` | `StoreConfigSnapshot` 和 `ManifestStoreInfo` 类型加 postgres |
 | `server.ts` | `/app/src/gateway/server.ts` | `STORE_MODE` env var 检查加 `"postgres"` |
+| `tdai-core.ts` | `/app/src/core/tdai-core.ts` | **修改**：Skill wiring 分支——SQLite 走 `getRawDb()`，PostgreSQL 走 `getPgPool()` 构造 `PgSkillStore`（与 SQLite 角色对等） |
+| `pg-skill-store.ts` | `/app/src/core/skill/pg-skill-store.ts` | **新增**：Skill 数据访问层的 PG 实现，与 `SqliteSkillStore` 语义 1:1 对齐 |
 
-### 5.2 补丁应用流程
+### 5.2 Skill 模块的 PG 对齐（pg-align）
+
+TAM 的 Skill 模块（程序性记忆：技能/经验的存储、检索、版本管理、对话提取）原本只支持
+SQLite——核心初始化时通过 `VectorStore.getRawDb()` 拿到底层数据库句柄。PG 后端此前因此跳过
+Skill wiring（日志 `Skill wiring skipped`）。
+
+对齐方案（不侵入官方接口）：
+
+| 项 | SQLite 版 | PG 版（pg-skill-store.ts） |
+|----|-----------|---------------------------|
+| 逃生舱 | `getRawDb()` → `DatabaseSync` | `PgMemoryStore.getPgPool()` → 共享同一 `pg.Pool` + 维度 |
+| 全文检索 | FTS5 | `skills.fts_segmented`（jieba 预分词）+ `fts_tsv` 生成列 + GIN（随行更新自动维护） |
+| 向量检索 | vec0 虚拟表 | 独立表 `skill_vec(skill_id PK, embedding vector(dim))` + IVFFlat cosine；并实现 embedding / hybrid(RRF) 检索路径 |
+| 写串行化 | `BEGIN IMMEDIATE` 全库串行 | 事务级 advisory lock（`pg_advisory_xact_lock(hashtext(skill_id))`）按 skill_id 串行 |
+| 时间戳 | INTEGER ms | BIGINT（`Date.now()` 超 int4），读回 `Number()` |
+| DDL | 同步建表 | `init()` 异步 DDL，方法内部 `await readyPromise`，DDL 完成前请求排队 |
+
+表结构由 `PgSkillStore.init()` 自动创建（`skills`（多版本同表，`is_head` 标记当前版本）+
+`skill_vec` 向量表），无需手工执行 DDL。启动成功的标志日志：
+
+```
+[memory-tdai] [pg-align] Skill store backend: PgSkillStore (dimensions=1024)
+```
+
+全链路验证脚本见 `skill-align/`（`skill-e2e.sh`：CRUD/版本/中英文 BM25 检索/重名冲突/物理
+删除 + PG 表结构校验；`skill-extract-e2e.sh`：对话 → LLM 提取 skill）。
+
+### 5.3 补丁应用流程
 
 `start-memory-core.sh` 执行顺序：
 
@@ -233,7 +274,7 @@ memory:
 4. 应用 sendDimensions hotfix (sed 插入 + 重启)
 5. 调用 apply-pg-patches.sh:
    a. npm install pg --save
-   b. docker cp 6 个补丁文件到容器
+   b. docker cp 8 个补丁文件到容器
    c. docker restart
    d. 等待健康检查
 6. 初始化 admin user
@@ -297,10 +338,15 @@ headers = {
 | `/v2/conversation/search` | POST | 搜索对话 (FTS + vector) |
 | `/v2/atomic/search` | POST | 搜索记忆 (L1, FTS + vector) |
 | `/v2/core/read` | POST | 读取 persona |
+| `/v3/skill/list` / `create` / `get` / `update` / `delete` / `versions` | POST | Skill 增删改查 + 版本管理（PG 后端已支持，见 §5.2） |
+| `/v3/skill/search` | POST | Skill 检索（BM25 / 向量 / RRF 混合） |
 | `/health` | GET | 健康检查 |
 
 > 简单验证：`curl http://<server-ip>:8420/health`；
-> 或运行 `scripts/main.py`（LangGraph 演示应用，配置见环境变量 `MEMORY_URL` / `MEMORY_ADMIN_KEY` 等）。
+> 或运行 `scripts/test_pg_e2e.py` / `scripts/test_search.py`（配置见环境变量 `MEMORY_URL` / `MEMORY_ADMIN_KEY`）；
+> 或运行 `scripts/main.py`（LangGraph 演示应用，TAM + Skill-Hub 双记忆，配置见环境变量
+> `MEMORY_URL` / `MEMORY_ADMIN_KEY` / `SKILLHUB_URL` / `SKILLHUB_API_KEY` 等）；
+> 纯 TAM 演示见 `example/`。
 
 ---
 
@@ -343,7 +389,7 @@ p.query('SELECT COUNT(*) FROM l1_records').then(r=>{console.log('L1:',r.rows[0].
 
 ## 9. 已知限制
 
-1. **Skill wiring 跳过**: 日志中 `Skill wiring skipped: vectorStore does not expose getRawDb()` — PG 后端不支持 SQLite 特有的 `getRawDb()` 接口，Skill 模块功能受限（不影响核心记忆功能）
+1. ~~**Skill wiring 跳过**~~ **已解决**：PG 后端此前不支持 SQLite 特有的 `getRawDb()` 接口而跳过 Skill 模块；现已通过 `pg-store.ts` 的 `getPgPool()` 逃生舱 + `pg-skill-store.ts` 实现完整对齐（见 §5.2）
 2. **容器内补丁非持久化**: 通过 `docker commit` 自行固化的镜像可包含补丁，但用原始镜像每次重建容器都需要重新应用（`start-memory-core.sh` 会自动完成）
 3. **jieba 分词**: FTS 使用 `tokenizeForFts` (jieba) 分词后存入 `message_segmented`，再生成 `tsvector`；查询时同样分词后用 `websearch_to_tsquery('simple', ...)`
 

@@ -22,6 +22,9 @@ docker cp "$PATCH_DIR/factory.ts" "$CONTAINER:/app/src/core/store/factory.ts"
 docker cp "$PATCH_DIR/store-pool.ts" "$CONTAINER:/app/src/core/store/store-pool.ts"
 docker cp "$PATCH_DIR/manifest.ts" "$CONTAINER:/app/src/utils/manifest.ts"
 docker cp "$PATCH_DIR/server.ts" "$CONTAINER:/app/src/gateway/server.ts"
+# [pg-align] Skill 模块 PG 后端
+docker cp "$PATCH_DIR/pg-skill-store.ts" "$CONTAINER:/app/src/core/skill/pg-skill-store.ts"
+docker cp "$PATCH_DIR/tdai-core.ts" "$CONTAINER:/app/src/core/tdai-core.ts"
 
 # 3. 重启容器使补丁生效
 echo "[pg-patch] Restarting container..."

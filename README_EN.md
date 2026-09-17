@@ -59,16 +59,22 @@ This guide describes how to migrate the TDAI Memory Core storage backend from SQ
 TAM/
 ├── README.md / README_EN.md           ← This documentation (Chinese / English)
 ├── LICENSE / NOTICE                   ← MIT license + upstream derivation notice
+├── docs/
+│   └── tam-pg-support.md              ← TAM feature overview & PostgreSQL support notes (Chinese)
 ├── src/                               ← Patched sources extracted from the container
 │   ├── config.ts                      ← StoreBackend type + PostgresConfig + config parsing
 │   ├── gateway/
 │   │   └── server.ts                  ← STORE_MODE env var check
 │   ├── utils/
 │   │   └── manifest.ts                ← StoreConfigSnapshot + ManifestStoreInfo types
-│   └── core/store/
-│       ├── pg-store.ts                ← ★ NEW: PG storage implementation (IMemoryStore interface)
-│       ├── factory.ts                 ← createStoreBundle adds postgres case
-│       └── store-pool.ts              ← StoreMode + createPostgresStore + getStore branch
+│   ├── core/
+│   │   ├── tdai-core.ts               ← ★ MODIFIED: Skill wiring adds getPgPool() branch
+│   │   ├── skill/
+│   │   │   └── pg-skill-store.ts      ← ★ NEW: Skill data-access layer, PG implementation
+│   │   └── store/
+│   │       ├── pg-store.ts            ← ★ NEW: PG storage (IMemoryStore + getPgPool() escape hatch)
+│   │       ├── factory.ts             ← createStoreBundle adds postgres case
+│   │       └── store-pool.ts          ← StoreMode + createPostgresStore + getStore branch
 ├── patches/                           ← Patch files + patching scripts
 │   ├── pg-store.ts                    ← Same as src/core/store/pg-store.ts (for deployment)
 │   ├── config.ts                      ← Same as src/config.ts (for deployment)
@@ -76,6 +82,8 @@ TAM/
 │   ├── store-pool.ts                  ← Same as src/core/store/store-pool.ts (for deployment)
 │   ├── manifest.ts                    ← Same as src/utils/manifest.ts (for deployment)
 │   ├── server.ts                      ← Same as src/gateway/server.ts (for deployment)
+│   ├── tdai-core.ts                   ← Same as src/core/tdai-core.ts (for deployment)
+│   ├── pg-skill-store.ts              ← Same as src/core/skill/pg-skill-store.ts (for deployment)
 │   ├── pg-store-original.ts           ← Original merged pg-store.ts (before bugfixes)
 │   ├── patch-all.js                   ← Main patch script (config/factory/store-pool)
 │   ├── fix-factory.js                 ← factory.ts postgres case insertion
@@ -90,22 +98,26 @@ TAM/
 │   ├── fix-timestamp2.cjs             ← Fix timestamp in ?? 0 patterns
 │   ├── fix-yaml.py                    ← YAML config repair script
 │   └── create-db.js                   ← PG database creation script (reads PG_CONNECTION_STRING)
-└── deploy/                            ← Deployment scripts
-    ├── .env.example                   ← Environment variable template (copy to .env and fill in)
-    ├── start-all.sh                   ← Start all services
-    ├── start-memory-core.sh           ← ★ Start memory-core (modified for PG)
-    ├── start-memory-hub.sh            ← Start panel UI
-    ├── start-proxy.sh                 ← Start proxy
-    ├── stop-all.sh                    ← Stop all services
-    ├── apply-pg-patches.sh            ← ★ Auto-apply PG migration patches
-    ├── _lib.sh                        ← Deployment helper functions
-    └── verify.sh                      ← Deployment verification script
+├── deploy/                            ← Deployment scripts
+│   ├── .env.example                   ← Environment variable template (copy to .env and fill in)
+│   ├── start-all.sh                   ← Start all services
+│   ├── start-memory-core.sh           ← ★ Start memory-core (modified for PG)
+│   ├── start-memory-hub.sh            ← Start panel UI
+│   ├── start-proxy.sh                 ← Start proxy
+│   ├── stop-all.sh                    ← Stop all services
+│   ├── apply-pg-patches.sh            ← ★ Auto-apply PG migration patches (8 files)
+│   ├── _lib.sh                        ← Deployment helper functions
+│   └── verify.sh                      ← Deployment verification script
 ├── db/
 │   └── schema.sql                     ← PG database DDL (9 tables + indexes)
-└── scripts/                           ← Demo application
+├── skill-align/                       ← ★ Skill module PG-alignment verification suite (E2E/smoke scripts)
+├── example/                           ← TAM memory Agent demo app (FastAPI + LangGraph + Web UI)
+└── scripts/                           ← Test/demo scripts
     ├── memory_client.py               ← Memory V2 API client
-    ├── main.py                        ← LangGraph Chat Agent (config via environment variables)
-    └── index.html                     ← Chat web UI
+    ├── main.py                        ← LangGraph Chat Agent (TAM + Skill-Hub dual memory)
+    ├── index.html                     ← Chat web UI
+    ├── test_pg_e2e.py                 ← PG end-to-end test (config via environment variables)
+    └── test_search.py                 ← Search test (config via environment variables)
 ```
 
 > Note: `.env`, `.admin-key`, and `tdai-gateway.yaml` contain local secrets and are not
@@ -218,18 +230,50 @@ The container must run with `STORE_MODE=postgres`, injected automatically by
 
 ## 5. Patch details
 
-### 5.1 Modified source files (6)
+### 5.1 Modified source files (8)
 
 | File | Container path | Change |
 |------|----------------|--------|
-| `pg-store.ts` | `/app/src/core/store/pg-store.ts` | **NEW**: PG storage implementation, ~670 lines, full `IMemoryStore` interface |
+| `pg-store.ts` | `/app/src/core/store/pg-store.ts` | **NEW**: PG storage implementation, ~670 lines, full `IMemoryStore` interface; adds `getPgPool()` escape hatch (exposes the pool + dimensions for the Skill module) |
 | `config.ts` | `/app/src/config.ts` | `StoreBackend` type adds `"postgres"`; new `PostgresConfig` interface; config parsing adds `postgres` field |
 | `factory.ts` | `/app/src/core/store/factory.ts` | `createStoreBundle` switch adds `case "postgres"` |
 | `store-pool.ts` | `/app/src/core/store/store-pool.ts` | `StoreMode` adds `"postgres"`; new `createPostgresStore()` method; `getStore` branch |
 | `manifest.ts` | `/app/src/utils/manifest.ts` | `StoreConfigSnapshot` and `ManifestStoreInfo` types add postgres |
 | `server.ts` | `/app/src/gateway/server.ts` | `STORE_MODE` env var check adds `"postgres"` |
+| `tdai-core.ts` | `/app/src/core/tdai-core.ts` | **MODIFIED**: Skill wiring branch — SQLite uses `getRawDb()`, PostgreSQL uses `getPgPool()` to construct `PgSkillStore` (role-equivalent to SQLite) |
+| `pg-skill-store.ts` | `/app/src/core/skill/pg-skill-store.ts` | **NEW**: PostgreSQL implementation of the Skill data-access layer, semantically 1:1 aligned with `SqliteSkillStore` |
 
-### 5.2 Patch application flow
+### 5.2 Skill module PG alignment (pg-align)
+
+The Skill module (procedural memory: storing/searching/versioning skills and experiences,
+plus conversation-driven extraction) originally supported SQLite only — core initialization
+obtains the underlying DB handle via `VectorStore.getRawDb()`. The PG backend therefore used
+to skip Skill wiring (log line `Skill wiring skipped`).
+
+The alignment approach (no intrusion into upstream interfaces):
+
+| Aspect | SQLite version | PG version (pg-skill-store.ts) |
+|--------|----------------|-------------------------------|
+| Escape hatch | `getRawDb()` → `DatabaseSync` | `PgMemoryStore.getPgPool()` → shares the same `pg.Pool` + dimensions |
+| Full-text search | FTS5 | `skills.fts_segmented` (jieba-presegmented) + `fts_tsv` generated column + GIN (auto-maintained on row updates) |
+| Vector search | vec0 virtual table | separate table `skill_vec(skill_id PK, embedding vector(dim))` + IVFFlat cosine; also implements embedding / hybrid (RRF) retrieval paths |
+| Write serialization | `BEGIN IMMEDIATE` (whole-DB) | transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtext(skill_id))`), serialized per skill_id |
+| Timestamps | INTEGER ms | BIGINT (`Date.now()` exceeds int4); converted back with `Number()` |
+| DDL | synchronous table creation | async DDL in `init()`; methods `await readyPromise` so requests queue until DDL completes |
+
+Tables are created automatically by `PgSkillStore.init()` (`skills` — multi-version rows with an
+`is_head` flag — plus the `skill_vec` vector table); no manual DDL required. The success log line
+on startup:
+
+```
+[memory-tdai] [pg-align] Skill store backend: PgSkillStore (dimensions=1024)
+```
+
+End-to-end verification scripts live in `skill-align/` (`skill-e2e.sh`: CRUD/versioning/Chinese+
+English BM25 search/duplicate-name conflict/physical delete + PG table checks;
+`skill-extract-e2e.sh`: conversation → LLM skill extraction).
+
+### 5.3 Patch application flow
 
 `start-memory-core.sh` execution order:
 
@@ -240,7 +284,7 @@ The container must run with `STORE_MODE=postgres`, injected automatically by
 4. Apply sendDimensions hotfix (sed insertion + restart)
 5. Call apply-pg-patches.sh:
    a. npm install pg --save
-   b. docker cp the 6 patch files into the container
+   b. docker cp the 8 patch files into the container
    c. docker restart
    d. Wait for health check
 6. Initialize the admin user
@@ -304,11 +348,16 @@ headers = {
 | `/v2/conversation/search` | POST | Search conversations (FTS + vector) |
 | `/v2/atomic/search` | POST | Search memories (L1, FTS + vector) |
 | `/v2/core/read` | POST | Read persona |
+| `/v3/skill/list` / `create` / `get` / `update` / `delete` / `versions` | POST | Skill CRUD + versioning (supported on PG, see §5.2) |
+| `/v3/skill/search` | POST | Skill search (BM25 / vector / RRF hybrid) |
 | `/health` | GET | Health check |
 
 > Quick verification: `curl http://<server-ip>:8420/health`;
-> or run `scripts/main.py` (LangGraph demo app, configured via the `MEMORY_URL` /
-> `MEMORY_ADMIN_KEY` environment variables).
+> run `scripts/test_pg_e2e.py` / `scripts/test_search.py` (configured via the `MEMORY_URL` /
+> `MEMORY_ADMIN_KEY` environment variables);
+> or run `scripts/main.py` (LangGraph demo app with TAM + Skill-Hub dual memory, configured via
+> `MEMORY_URL` / `MEMORY_ADMIN_KEY` / `SKILLHUB_URL` / `SKILLHUB_API_KEY`, etc.).
+> For a TAM-only demo see `example/`.
 
 ---
 
@@ -352,9 +401,9 @@ Edit `.env` or `start-memory-core.sh`:
 
 ## 9. Known limitations
 
-1. **Skill wiring skipped**: the log shows `Skill wiring skipped: vectorStore does not
-   expose getRawDb()` — the PG backend does not support the SQLite-specific `getRawDb()`
-   interface, limiting the Skill module (core memory functionality is unaffected).
+1. ~~**Skill wiring skipped**~~ **Resolved**: the PG backend used to skip the Skill module
+   because it lacked the SQLite-specific `getRawDb()` interface; full alignment is now provided
+   via the `getPgPool()` escape hatch in `pg-store.ts` + `pg-skill-store.ts` (see §5.2).
 2. **In-container patches are not persistent**: an image you bake yourself via
    `docker commit` can include the patches, but with the upstream image every container
    rebuild re-applies them (`start-memory-core.sh` does this automatically).
