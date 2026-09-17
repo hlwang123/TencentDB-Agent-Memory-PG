@@ -65,6 +65,14 @@ export class PgMemoryStore implements IMemoryStore {
     });
   }
 
+  /**
+   * [pg-align] 逃生舱：暴露底层 Pool + 维度，供 PgSkillStore（Skill 模块）复用
+   * 同一连接池。与 SQLite 侧 VectorStore.getRawDb() 的角色完全对等。
+   */
+  getPgPool(): { pool: Pool; dimensions: number } {
+    return { pool: this.pool, dimensions: this.dimensions };
+  }
+
   async init(providerInfo?: EmbeddingProviderInfo): Promise<StoreInitResult> {
     if (this.initialized) return { needsReindex: false };
     try {

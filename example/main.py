@@ -1,15 +1,13 @@
 """
 TencentDB-Agent-Memory — LangGraph Chat Agent
 Backend: FastAPI + LangGraph ReAct Agent
-Integrates: Memory V2 API (TAM) + Skill-Hub + MCP Knowledge Server + DashScope LLM
+Integrates: Memory V2 API (TAM) + MCP Knowledge Server + OpenAI-compatible LLM
 
-Dual-memory architecture:
-  - TAM (episodic):       conversation recording, L1 memory extraction, hybrid search
-  - Skill-Hub (procedural): skill injection, reflection, feedback, usage tracking
+Memory architecture:
+  - TAM (episodic): conversation recording, L1 memory extraction, hybrid search
 """
 
 import json
-import os
 import uuid
 import hashlib
 from contextvars import ContextVar
@@ -29,134 +27,20 @@ from langgraph.prebuilt import create_react_agent
 from mcp_client import MCPClient
 from memory_client import MemoryClient
 
+
 # ── Configuration（全部可通过环境变量覆盖）───────────────────────
+import os
 MEMORY_URL = os.getenv("MEMORY_URL", "http://127.0.0.1:8420")
 MCP_URL = os.getenv("MCP_URL", "http://127.0.0.1:8432/mcp")
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen3.5-27b")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "sk-noauth")
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen3.8-27b")
 ADMIN_KEY = os.getenv("MEMORY_ADMIN_KEY", "")
 TEAM_ID = os.getenv("MEMORY_TEAM_ID", "team-demo0000001")
 AGENT_ID = os.getenv("MEMORY_AGENT_ID", "agt-demo0000001")
-SKILLHUB_URL = os.getenv("SKILLHUB_URL", "http://127.0.0.1:9983")
-SKILLHUB_HUB_KEY = os.getenv("SKILLHUB_API_KEY", "")
-
-
-# ── Skill-Hub Client ────────────────────────────────────────────
-class SkillHubClient:
-    """Async client for Skill-Hub API — procedural memory (skills/experiences)."""
-
-    def __init__(self, base_url: str, api_key: str):
-        self.base_url = base_url.rstrip("/")
-        self.headers = {"Content-Type": "application/json", "X-API-Key": api_key}
-        self._session: httpx.AsyncClient | None = None
-
-    async def _get_session(self) -> httpx.AsyncClient:
-        if self._session is None or self._session.is_closed:
-            self._session = httpx.AsyncClient(timeout=30)
-        return self._session
-
-    async def _call(self, path: str, body: dict | None = None) -> dict:
-        session = await self._get_session()
-        resp = await session.post(f"{self.base_url}{path}", json=body or {}, headers=self.headers)
-        return resp.json()
-
-    async def _get(self, path: str) -> dict:
-        session = await self._get_session()
-        resp = await session.get(f"{self.base_url}{path}", headers=self.headers)
-        return resp.json()
-
-    async def inject(self, mode: str = "prompt", query: str = "", agent_id: str = "",
-                     user_id: str = "", session_id: str = "", budget_chars: int = 2000,
-                     tool_name: str = "") -> dict:
-        """Inject skills into prompt or tool description."""
-        body: dict = {"mode": mode, "budget_chars": budget_chars, "session_id": session_id}
-        if query:
-            body["query"] = query
-        if agent_id:
-            body["agent_id"] = agent_id
-        if user_id:
-            body["user_id"] = user_id
-        if tool_name:
-            body["tool_name"] = tool_name
-        return await self._call("/api/v1/inject", body)
-
-    async def report_usage(self, skill_ids: list[str], session_id: str,
-                           success: bool = True, latency_ms: int = 0) -> dict:
-        """Report whether injected skills were helpful."""
-        return await self._call("/api/v1/usage", {
-            "skill_ids": skill_ids, "session_id": session_id,
-            "success": success, "latency_ms": latency_ms,
-        })
-
-    async def upload_session(self, session_id: str, messages: list[dict],
-                             agent_id: str = "", user_id: str = "",
-                             project_id: int = 0, report_snapshot: str = "") -> dict:
-        """Upload session snapshot for reflection."""
-        return await self._call("/api/v1/sessions", {
-            "session_id": session_id, "messages": messages,
-            "agent_id": agent_id, "user_id": user_id,
-            "project_id": project_id, "report_snapshot": report_snapshot[:5000],
-        })
-
-    async def trigger_reflection(self, session_id: str, enqueue: bool = True) -> dict:
-        """Trigger async reflection on a session (LLM distills skills)."""
-        return await self._call(f"/api/v1/reflection/run", {
-            "session_id": session_id, "enqueue": enqueue,
-        })
-
-    async def capture_error(self, tool_name: str, error_type: str, error_message: str,
-                            session_id: str, retry_count: int = 1) -> dict:
-        """Capture runtime tool error → generates err_ skill (no LLM)."""
-        return await self._call("/api/v1/experiences/capture", {
-            "tool_name": tool_name, "error_type": error_type,
-            "error_message": error_message, "session_id": session_id,
-            "retry_count": retry_count,
-        })
-
-    async def hotfix_lookup(self, tool_name: str, error_type: str,
-                            error_message: str) -> dict:
-        """Look up hotfix for a tool error."""
-        return await self._call("/api/v1/hotfix/lookup", {
-            "tool_name": tool_name, "error_type": error_type,
-            "error_message": error_message,
-        })
-
-    async def feedback_explicit(self, session_id: str, user_id: str,
-                                overall_rating: int, overall_comment: str = "",
-                                steps: list[dict] | None = None,
-                                project_id: int = 0) -> dict:
-        """Submit explicit feedback (rating + comment)."""
-        body: dict = {
-            "session_id": session_id, "user_id": user_id,
-            "project_id": project_id,
-            "overall": {"rating": overall_rating, "comment": overall_comment},
-        }
-        if steps:
-            body["steps"] = steps
-        return await self._call("/api/v1/feedback", body)
-
-    async def feedback_implicit(self, session_id: str, step_name: str, user_id: str,
-                                ai_output: str, user_modified: str) -> dict:
-        """Submit implicit feedback (user modified AI output)."""
-        return await self._call("/api/v1/feedback/implicit", {
-            "session_id": session_id, "step_name": step_name, "user_id": user_id,
-            "ai_output": ai_output, "user_modified": user_modified,
-        })
-
-    async def search_skills(self, query: str, top_k: int = 5, project_id: int = 0) -> dict:
-        """Search skill library."""
-        return await self._call("/api/v1/skills/search", {
-            "query": query, "top_k": top_k, "project_id": project_id,
-        })
-
-    async def close(self):
-        if self._session and not self._session.is_closed:
-            await self._session.aclose()
 
 # ── Globals ─────────────────────────────────────────────────────
 mcp_client: MCPClient | None = None
-skillhub_client: SkillHubClient | None = None
 agent_executor = None
 memory_saver = MemorySaver()
 mcp_tools_names: list[str] = []
@@ -166,6 +50,8 @@ _user_clients: dict[str, MemoryClient] = {}
 _current_user_id: ContextVar[str] = ContextVar("current_user_id", default="")
 _current_agent_id: ContextVar[str] = ContextVar("current_agent_id", default="")
 _current_session_id: ContextVar[str] = ContextVar("current_session_id", default="")
+_current_team_id: ContextVar[str] = ContextVar("current_team_id", default=TEAM_ID)
+_current_sys_prompt: ContextVar[str] = ContextVar("current_sys_prompt", default="")
 
 
 def make_user_id(name: str) -> str:
@@ -181,20 +67,19 @@ def make_agent_id(name: str) -> str:
 
 
 # ── Lifespan ────────────────────────────────────────────────────
-def get_user_client(user_id: str, agent_id: str) -> MemoryClient:
+def get_user_client(user_id: str, agent_id: str, team_id: str = TEAM_ID) -> MemoryClient:
     """Get or create a MemoryClient for a specific user."""
-    key = f"{user_id}:{agent_id}"
+    key = f"{team_id}:{user_id}:{agent_id}"
     if key not in _user_clients:
-        _user_clients[key] = MemoryClient(MEMORY_URL, ADMIN_KEY, team_id=TEAM_ID, user_id=user_id, agent_id=agent_id)
+        _user_clients[key] = MemoryClient(MEMORY_URL, ADMIN_KEY, team_id=team_id, user_id=user_id, agent_id=agent_id)
     return _user_clients[key]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global mcp_client, skillhub_client, agent_executor, mcp_tools_names
+    global mcp_client, agent_executor, mcp_tools_names
 
     mcp_client = MCPClient(MCP_URL)
-    skillhub_client = SkillHubClient(SKILLHUB_URL, SKILLHUB_HUB_KEY)
 
     # Init MCP
     await mcp_client.initialize()
@@ -219,15 +104,23 @@ async def lifespan(app: FastAPI):
 
     # Build agent
     llm = ChatOpenAI(model=LLM_MODEL, base_url=LLM_BASE_URL, api_key=LLM_API_KEY, temperature=0.7)
-    agent_executor = create_react_agent(llm, lc_tools, checkpointer=memory_saver)
+
+    def _agent_prompt(state):
+        # Prepend the per-request system prompt transiently (not persisted in
+        # checkpoint): strict vLLM chat templates reject mid-history system
+        # messages, and persona/skills should refresh each turn.
+        msgs = [m for m in state["messages"] if not isinstance(m, SystemMessage)]
+        sys_content = _current_sys_prompt.get()
+        if sys_content:
+            return [SystemMessage(content=sys_content)] + msgs
+        return msgs
+
+    agent_executor = create_react_agent(llm, lc_tools, checkpointer=memory_saver, prompt=_agent_prompt)
 
     print(f"[INIT] Agent ready. MCP tools: {mcp_tools_names}")
     print(f"[INIT] Memory tools: memory_search, conversation_search, user_persona, list_scenarios")
-    print(f"[INIT] Skill-Hub: {SKILLHUB_URL}")
     yield
 
-    if skillhub_client:
-        await skillhub_client.close()
     await mcp_client.close()
     for c in _user_clients.values():
         await c.close()
@@ -261,7 +154,8 @@ def _make_memory_tools() -> list:
         """Search long-term memories (persona, facts, knowledge) by semantic similarity."""
         user_id = _current_user_id.get()
         agent_id = _current_agent_id.get()
-        client = get_user_client(user_id, agent_id)
+        team_id = _current_team_id.get()
+        client = get_user_client(user_id, agent_id, team_id)
         items = await client.search_memories(query, limit)
         if not items:
             return "No relevant memories found."
@@ -276,7 +170,8 @@ def _make_memory_tools() -> list:
         """Search past conversation history by semantic similarity."""
         user_id = _current_user_id.get()
         agent_id = _current_agent_id.get()
-        client = get_user_client(user_id, agent_id)
+        team_id = _current_team_id.get()
+        client = get_user_client(user_id, agent_id, team_id)
         msgs = await client.search_conversations(query, limit, session_id=f"default:{user_id}")
         if not msgs:
             return "No relevant conversation history found."
@@ -289,7 +184,8 @@ def _make_memory_tools() -> list:
         """Get the user's narrative profile / persona. Call this first to understand who the user is."""
         user_id = _current_user_id.get()
         agent_id = _current_agent_id.get()
-        client = get_user_client(user_id, agent_id)
+        team_id = _current_team_id.get()
+        client = get_user_client(user_id, agent_id, team_id)
         p = await client.get_persona()
         return p if p else "(No persona available yet)"
 
@@ -297,7 +193,8 @@ def _make_memory_tools() -> list:
         """List active knowledge scenarios (project context, notes, docs)."""
         user_id = _current_user_id.get()
         agent_id = _current_agent_id.get()
-        client = get_user_client(user_id, agent_id)
+        team_id = _current_team_id.get()
+        client = get_user_client(user_id, agent_id, team_id)
         entries = await client.list_scenarios()
         if not entries:
             return "No active scenarios."
@@ -340,7 +237,6 @@ async def get_tools():
         "tools": all_tools,
         "mcp": mcp_tools_names,
         "memory": ["memory_search", "conversation_search", "user_persona", "list_scenarios"],
-        "skillhub": ["inject", "usage", "capture", "hotfix", "reflection", "feedback"],
     }
 
 
@@ -348,17 +244,19 @@ async def get_tools():
 async def get_memory(request: Request):
     body = await request.json()
     display_name = body.get("user_id", "").strip()
+    team_id = (body.get("team_id") or "").strip() or TEAM_ID
+    agent_id_override = (body.get("agent_id") or "").strip()
     if not display_name:
         return {"error": "user_id required"}
 
     user_id = make_user_id(display_name)
-    agent_id = make_agent_id(display_name)
+    agent_id = agent_id_override or make_agent_id(display_name)
 
     h = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {ADMIN_KEY}",
         "x-tdai-service-id": "default",
-        "x-tdai-team-id": TEAM_ID,
+        "x-tdai-team-id": team_id,
         "x-tdai-user-id": user_id,
         "x-tdai-agent-id": agent_id,
     }
@@ -372,7 +270,7 @@ async def get_memory(request: Request):
         # Persona via v3/core/read (per-user agent_id for isolation)
         try:
             r1 = await http.post(f"{MEMORY_URL}/v3/core/read", headers=h, json={
-                "team_id": TEAM_ID, "agent_id": agent_id, "user_id": user_id, "session_id": "default",
+                "team_id": team_id, "agent_id": agent_id, "user_id": user_id, "session_id": "default",
             })
             persona = r1.json().get("data", {}).get("content", "") or ""
         except Exception:
@@ -401,7 +299,7 @@ async def get_memory(request: Request):
         # Scenarios via v3/scenario/ls (per-user agent_id)
         try:
             r4 = await http.post(f"{MEMORY_URL}/v3/scenario/ls", headers=h, json={
-                "team_id": TEAM_ID, "agent_id": agent_id, "user_id": user_id, "session_id": "default",
+                "team_id": team_id, "agent_id": agent_id, "user_id": user_id, "session_id": "default",
             })
             scenarios = r4.json().get("data", {}).get("entries", [])
         except Exception:
@@ -409,6 +307,8 @@ async def get_memory(request: Request):
 
     return {
         "user_id": user_id,
+        "agent_id": agent_id,
+        "team_id": team_id,
         "persona": persona,
         "memories": memories,
         "conversations": conversations,
@@ -421,18 +321,20 @@ async def update_memory(request: Request):
     body = await request.json()
     display_name = body.get("user_id", "").strip()
     mem_type = body.get("type", "").strip()
+    team_id = (body.get("team_id") or "").strip() or TEAM_ID
+    agent_id_override = (body.get("agent_id") or "").strip()
 
     if not display_name or not mem_type:
         return {"error": "user_id and type required"}
 
     user_id = make_user_id(display_name)
-    agent_id = make_agent_id(display_name)
+    agent_id = agent_id_override or make_agent_id(display_name)
 
     h = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {ADMIN_KEY}",
         "x-tdai-service-id": "default",
-        "x-tdai-team-id": TEAM_ID,
+        "x-tdai-team-id": team_id,
         "x-tdai-user-id": user_id,
         "x-tdai-agent-id": agent_id,
     }
@@ -441,7 +343,7 @@ async def update_memory(request: Request):
         if mem_type == "persona":
             content = body.get("content", "")
             r = await http.post(f"{MEMORY_URL}/v3/core/write", headers=h, json={
-                "team_id": TEAM_ID, "agent_id": agent_id, "user_id": user_id,
+                "team_id": team_id, "agent_id": agent_id, "user_id": user_id,
                 "session_id": "default", "content": content,
             })
             return {"ok": True, "data": r.json().get("data", {})}
@@ -479,18 +381,20 @@ async def delete_memory(request: Request):
     display_name = body.get("user_id", "").strip()
     mem_type = body.get("type", "").strip()
     item_id = body.get("id", "")
+    team_id = (body.get("team_id") or "").strip() or TEAM_ID
+    agent_id_override = (body.get("agent_id") or "").strip()
 
     if not display_name or not mem_type:
         return {"error": "user_id and type required"}
 
     user_id = make_user_id(display_name)
-    agent_id = make_agent_id(display_name)
+    agent_id = agent_id_override or make_agent_id(display_name)
 
     h = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {ADMIN_KEY}",
         "x-tdai-service-id": "default",
-        "x-tdai-team-id": TEAM_ID,
+        "x-tdai-team-id": team_id,
         "x-tdai-user-id": user_id,
         "x-tdai-agent-id": agent_id,
     }
@@ -510,18 +414,20 @@ async def get_scenario_content(request: Request):
     body = await request.json()
     display_name = body.get("user_id", "").strip()
     path = body.get("path", "").strip()
+    team_id = (body.get("team_id") or "").strip() or TEAM_ID
+    agent_id_override = (body.get("agent_id") or "").strip()
 
     if not display_name or not path:
         return {"error": "user_id and path required"}
 
     user_id = make_user_id(display_name)
-    agent_id = make_agent_id(display_name)
+    agent_id = agent_id_override or make_agent_id(display_name)
 
     h = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {ADMIN_KEY}",
         "x-tdai-service-id": "default",
-        "x-tdai-team-id": TEAM_ID,
+        "x-tdai-team-id": team_id,
         "x-tdai-user-id": user_id,
         "x-tdai-agent-id": agent_id,
     }
@@ -540,6 +446,8 @@ async def chat(request: Request):
     user_msg = body.get("message", "").strip()
     thread_id = body.get("thread_id") or str(uuid.uuid4())
     display_name = body.get("user_id", "").strip()
+    team_id = (body.get("team_id") or "").strip() or TEAM_ID
+    agent_id_override = (body.get("agent_id") or "").strip()
 
     if not user_msg:
         return {"error": "empty message"}
@@ -547,50 +455,33 @@ async def chat(request: Request):
         return {"error": "user_id required"}
 
     user_id = make_user_id(display_name)
-    agent_id = make_agent_id(display_name)
+    agent_id = agent_id_override or make_agent_id(display_name)
+    session_id = f"{user_id}:{thread_id}"
 
     # Set context for memory tools
-    session_id = f"{user_id}:{thread_id}"
     _current_user_id.set(user_id)
     _current_agent_id.set(agent_id)
     _current_session_id.set(session_id)
+    _current_team_id.set(team_id)
 
-    config = {"configurable": {"thread_id": session_id}}
+    config = {"configurable": {"thread_id": f"{user_id}:{thread_id}"}}
 
     # Load user's persona (per-user agent_id for isolation)
-    client = get_user_client(user_id, agent_id)
+    client = get_user_client(user_id, agent_id, team_id)
     system_persona = await client.get_persona()
 
-    # ── Skill-Hub: inject procedural memory (skills/experiences) ──
-    injected_skills: list[dict] = []
-    skill_prompt = ""
-    try:
-        inj = await skillhub_client.inject(
-            mode="prompt", query=user_msg[:500],
-            agent_id=agent_id, user_id=user_id,
-            session_id=session_id, budget_chars=2000,
-        )
-        skill_prompt = inj.get("data", {}).get("prompt_text", "")
-        injected_skills = inj.get("data", {}).get("items", [])
-        if injected_skills:
-            print(f"[SKILL-HUB] Injected {len(injected_skills)} skills for session {session_id}")
-    except Exception as e:
-        print(f"[SKILL-HUB] inject failed (non-blocking): {e}")
-
-    # Build system prompt with persona + skills
+    # Build system prompt with persona
     sys_content = "你是 TencentDB-Agent-Memory 系统中的智能AI助手。"
     if system_persona:
         sys_content += f"\n\n## 用户画像\n{system_persona[:2000]}"
     sys_content += "\n\n你可以使用工具搜索用户记忆、对话历史、知识库。请根据上下文回答，回答要简洁专业。"
-    if skill_prompt:
-        sys_content += f"\n\n## 经验技能指引\n{skill_prompt}"
 
-    messages = [SystemMessage(content=sys_content), HumanMessage(content=user_msg)]
+    _current_sys_prompt.set(sys_content)
+    messages = [HumanMessage(content=user_msg)]
 
     # Run agent and collect steps
     steps = []
     final_answer = ""
-    tool_errors: list[dict] = []
 
     try:
         async for event in agent_executor.astream({"messages": messages}, config, stream_mode="updates"):
@@ -613,142 +504,29 @@ async def chat(request: Request):
                             "tool": getattr(tm, "name", "?"),
                             "result": content[:300],
                         })
-                        # Capture tool errors for Skill-Hub
-                        if isinstance(content, str) and any(kw in content.lower() for kw in ["error", "fail", "timeout", "exception"]):
-                            tool_errors.append({
-                                "tool": getattr(tm, "name", "?"),
-                                "error": content[:500],
-                            })
     except Exception as e:
         final_answer = f"Agent error: {e}"
         print(f"[ERROR] {e}")
 
-    # ── Post-response: dual memory sediment ──
+    # ── Post-response: TAM sediment (episodic L0) ──
     conv_messages = [
         {"role": "user", "content": user_msg},
         {"role": "assistant", "content": final_answer},
     ]
 
-    # A. TAM: save conversation (episodic L0)
     if final_answer:
         try:
             await client.add_conversation(f"default:{user_id}", conv_messages)
         except Exception:
             pass
 
-    # B. Skill-Hub: upload session + report usage + trigger reflection
-    if final_answer and skillhub_client:
-        # Report usage of injected skills
-        if injected_skills:
-            skill_ids = [s.get("skill_id", "") for s in injected_skills if s.get("skill_id")]
-            try:
-                await skillhub_client.report_usage(skill_ids, session_id, success=True)
-            except Exception:
-                pass
-
-        # Capture tool errors (generates err_ skills without LLM)
-        for te in tool_errors:
-            try:
-                await skillhub_client.capture_error(
-                    tool_name=te["tool"],
-                    error_type="runtime",
-                    error_message=te["error"],
-                    session_id=session_id,
-                    retry_count=1,
-                )
-            except Exception:
-                pass
-
-        # Upload session snapshot for reflection
-        try:
-            await skillhub_client.upload_session(
-                session_id=session_id,
-                messages=conv_messages,
-                agent_id=agent_id,
-                user_id=user_id,
-                report_snapshot=final_answer[:5000],
-            )
-            # Trigger async reflection (LLM distills skills from this session)
-            await skillhub_client.trigger_reflection(session_id, enqueue=True)
-            print(f"[SKILL-HUB] Session uploaded + reflection enqueued for {session_id}")
-        except Exception as e:
-            print(f"[SKILL-HUB] session upload failed (non-blocking): {e}")
-
     return {
         "response": final_answer,
         "thread_id": thread_id,
+        "agent_id": agent_id,
+        "team_id": team_id,
         "steps": steps,
-        "injected_skills": [{"id": s.get("skill_id", ""), "type": s.get("skill_type", ""),
-                             "title": s.get("title", ""), "confidence": s.get("confidence", 0)}
-                            for s in injected_skills],
     }
-
-
-@app.post("/api/feedback")
-async def submit_feedback(request: Request):
-    """Explicit feedback — rating + comment, forwarded to Skill-Hub."""
-    body = await request.json()
-    display_name = body.get("user_id", "").strip()
-    session_id = body.get("session_id", "").strip()
-    rating = body.get("rating", 0)
-    comment = body.get("comment", "")
-
-    if not display_name or not session_id or not rating:
-        return {"error": "user_id, session_id, rating required"}
-
-    user_id = make_user_id(display_name)
-    agent_id = make_agent_id(display_name)
-
-    try:
-        result = await skillhub_client.feedback_explicit(
-            session_id=session_id,
-            user_id=user_id,
-            overall_rating=rating,
-            overall_comment=comment,
-        )
-        return {"ok": True, "data": result.get("data", {})}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.post("/api/feedback/implicit")
-async def submit_implicit_feedback(request: Request):
-    """Implicit feedback — user modified AI output, forwarded to Skill-Hub."""
-    body = await request.json()
-    display_name = body.get("user_id", "").strip()
-    session_id = body.get("session_id", "").strip()
-    step_name = body.get("step_name", "chat")
-    ai_output = body.get("ai_output", "")
-    user_modified = body.get("user_modified", "")
-
-    if not display_name or not session_id:
-        return {"error": "user_id, session_id required"}
-
-    user_id = make_user_id(display_name)
-
-    try:
-        result = await skillhub_client.feedback_implicit(
-            session_id=session_id,
-            step_name=step_name,
-            user_id=user_id,
-            ai_output=ai_output,
-            user_modified=user_modified,
-        )
-        return {"ok": True, "data": result.get("data", {})}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-@app.get("/api/skills/search")
-async def search_skills(q: str = "", top_k: int = 5):
-    """Search Skill-Hub library."""
-    if not q:
-        return {"items": []}
-    try:
-        result = await skillhub_client.search_skills(q, top_k=top_k)
-        return result.get("data", {})
-    except Exception as e:
-        return {"error": str(e)}
 
 
 @app.get("/api/health")
@@ -757,7 +535,6 @@ async def health():
         "status": "ok",
         "mcp": MCP_URL,
         "memory": MEMORY_URL,
-        "skillhub": SKILLHUB_URL,
         "llm": LLM_MODEL,
     }
 

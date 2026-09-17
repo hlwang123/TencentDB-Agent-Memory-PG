@@ -22,6 +22,14 @@ function md5(s){function L(k,d){return(k<<d)|(k>>>(32-d))}function K(G,k){var I,
   .login-box button { width: 100%; padding: 12px; border-radius: 10px; border: none; background: #667eea; color: white; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
   .login-box button:hover { background: #5a6fd6; }
   .login-box .hint { font-size: 11px; color: #555; margin-top: 12px; }
+  .adv-toggle { font-size: 12px; color: #667eea; cursor: pointer; margin-top: 10px; text-align: center; }
+  .adv-toggle:hover { text-decoration: underline; }
+  .adv-panel { margin-top: 10px; text-align: left; border-top: 1px solid #2a2a4a; padding-top: 10px; }
+  .adv-field { margin-bottom: 10px; }
+  .adv-field label { display: block; font-size: 11px; color: #888; margin-bottom: 4px; }
+  .adv-field input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #333; background: #0f0f1a; color: #e0e0e0; font-size: 13px; outline: none; }
+  .adv-field input:focus { border-color: #667eea; }
+  .adv-field input::placeholder { color: #555; }
 
   .header { background: #1a1a2e; padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #2a2a4a; }
   .header .logo { width: 36px; height: 36px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; color: white; }
@@ -123,23 +131,6 @@ function md5(s){function L(k,d){return(k<<d)|(k>>>(32-d))}function K(G,k){var I,
   .mem-edit-textarea:focus { border-color: #667eea; }
   .mem-edit-actions { display: flex; gap: 6px; margin-top: 8px; justify-content: flex-end; }
   .mem-edit-label { font-size: 11px; color: #666; margin-bottom: 4px; }
-
-  /* Skill badges + feedback */
-  .skill-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
-  .skill-badge { font-size: 10px; padding: 2px 8px; border-radius: 10px; border: 1px solid #333; background: #1a1a2e; color: #a78bfa; cursor: default; }
-  .skill-badge.err_mitigation { background: #2a1a1a; border-color: #443; color: #f87171; }
-  .skill-badge.biz_knowledge { background: #1a2a1a; border-color: #343; color: #4ade80; }
-  .skill-badge.hab_preference { background: #1a1a2a; border-color: #335; color: #60a5fa; }
-  .skill-badge.suc_case { background: #2a2a1a; border-color: #443; color: #fbbf24; }
-  .feedback-bar { display: flex; gap: 6px; margin-top: 8px; opacity: 0.6; transition: opacity 0.2s; }
-  .feedback-bar:hover { opacity: 1; }
-  .feedback-btn { font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid #333; background: transparent; color: #888; cursor: pointer; }
-  .feedback-btn:hover { border-color: #667eea; color: #667eea; }
-  .feedback-btn.active-up { border-color: #4ade80; color: #4ade80; background: #1e3a1e; }
-  .feedback-btn.active-down { border-color: #f87171; color: #f87171; background: #3a1e1e; }
-  .feedback-input { display: none; margin-top: 6px; }
-  .feedback-input textarea { width: 100%; min-height: 50px; background: #0f0f1a; border: 1px solid #333; border-radius: 6px; padding: 8px; color: #e0e0e0; font-size: 12px; font-family: inherit; resize: none; outline: none; }
-  .feedback-input button { margin-top: 4px; font-size: 11px; padding: 3px 12px; border-radius: 6px; border: none; background: #667eea; color: white; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -152,6 +143,17 @@ function md5(s){function L(k,d){return(k<<d)|(k>>>(32-d))}function K(G,k){var I,
     <input type="text" id="loginName" placeholder="你的名字（如：张三）" autofocus
            onkeydown="if(event.key==='Enter')login()">
     <button onclick="login()">进入</button>
+    <div class="adv-toggle" onclick="toggleAdv(this)">高级设置 ▸</div>
+    <div id="advPanel" class="adv-panel" style="display:none">
+      <div class="adv-field">
+        <label>Team ID（TAM 团队隔离空间）</label>
+        <input type="text" id="teamIdInput" value="team-demo0000001" placeholder="team-xxx">
+      </div>
+      <div class="adv-field">
+        <label>Agent ID（留空 = 按用户名自动生成）</label>
+        <input type="text" id="agentIdInput" value="" placeholder="agt-xxxxxxxxxxxx">
+      </div>
+    </div>
     <div class="hint">不同名字 = 不同记忆空间，互相隔离</div>
   </div>
 </div>
@@ -160,16 +162,16 @@ function md5(s){function L(k,d){return(k<<d)|(k>>>(32-d))}function K(G,k){var I,
   <div class="logo">M</div>
   <div class="title">
     <h1>Agent Chat</h1>
-    <p>LangGraph + Memory + MCP + DashScope</p>
+    <p>LangGraph + Memory + MCP</p>
   </div>
   <div class="user-badge">
     <button class="btn-memory" onclick="openMemory()">Memory</button>
     <span id="userLabel"></span>
+    <span id="userAgentInfo" style="font-size:10px;color:#666;"></span>
     <button onclick="logout()">切换</button>
   </div>
   <div class="status">
     <span id="status-mem">Memory</span>
-    <span id="status-skill">Skill</span>
     <span id="status-mcp">MCP</span>
     <span id="status-llm">LLM</span>
   </div>
@@ -188,7 +190,7 @@ function md5(s){function L(k,d){return(k<<d)|(k>>>(32-d))}function K(G,k){var I,
               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send()}"></textarea>
     <button id="sendBtn" onclick="send()">&#9654;</button>
   </div>
-  <div class="footer-note">Powered by LangGraph ReAct Agent &middot; TAM (episodic) + Skill-Hub (procedural) &middot; DashScope Qwen</div>
+  <div class="footer-note">Powered by LangGraph ReAct Agent &middot; TAM Memory &middot; Qwen</div>
 </div>
 
 <!-- Memory Modal -->
@@ -211,6 +213,24 @@ const sendBtn = document.getElementById('sendBtn');
 let threadId = null;
 let sending = false;
 let userId = null;
+let displayName = null;
+let config = { teamId: 'team-demo0000001', agentId: '' };
+
+function toggleAdv(el) {
+  const panel = document.getElementById('advPanel');
+  const shown = panel.style.display !== 'none';
+  panel.style.display = shown ? 'none' : 'block';
+  el.textContent = shown ? '高级设置 ▸' : '高级设置 ▾';
+}
+
+function readConfig() {
+  config.teamId = (document.getElementById('teamIdInput').value || '').trim() || 'team-demo0000001';
+  config.agentId = (document.getElementById('agentIdInput').value || '').trim();
+}
+
+function effectiveAgentId() {
+  return config.agentId || ('agt-' + md5(displayName).substring(0, 12));
+}
 
 // Auto-resize textarea
 input.addEventListener('input', () => {
@@ -221,7 +241,6 @@ input.addEventListener('input', () => {
 // Check health
 fetch('/api/health').then(r => r.json()).then(d => {
   document.getElementById('status-mem').className = d.memory ? '' : 'off';
-  document.getElementById('status-skill').className = d.skillhub ? '' : 'off';
   document.getElementById('status-mcp').className = d.mcp ? '' : 'off';
   document.getElementById('status-llm').className = d.llm ? '' : 'off';
 }).catch(() => {
@@ -231,13 +250,15 @@ fetch('/api/health').then(r => r.json()).then(d => {
 function login() {
   const name = document.getElementById('loginName').value.trim();
   if (!name) return;
-  // MD5 hash name to ASCII-safe user_id
-  userId = 'usr-' + md5(name);
+  readConfig();
+  // MD5 hash name to ASCII-safe user_id (12-char, matches backend)
+  userId = 'usr-' + md5(name).substring(0, 12);
   displayName = name;
   document.getElementById('loginOverlay').style.display = 'none';
   document.getElementById('headerBar').style.display = 'flex';
   document.getElementById('inputArea').style.display = 'block';
   document.getElementById('userLabel').textContent = name;
+  document.getElementById('userAgentInfo').textContent = `${effectiveAgentId()} · team:${config.teamId}`;
   document.getElementById('welcomeMsg').textContent = `你好 ${name}！我是你的专属 AI 助手，可以搜索你的记忆、对话历史和知识库。`;
   input.focus();
 }
@@ -245,6 +266,7 @@ function login() {
 function logout() {
   userId = null;
   threadId = null;
+  displayName = null;
   chat.innerHTML = `<div class="message system">
     <div class="avatar">i</div>
     <div class="bubble">已切换用户。请重新输入名字登录。</div>
@@ -256,7 +278,7 @@ function logout() {
   document.getElementById('loginName').focus();
 }
 
-function addMessage(role, content, steps, skills, sessionId) {
+function addMessage(role, content, steps) {
   const div = document.createElement('div');
   div.className = `message ${role}`;
 
@@ -271,64 +293,10 @@ function addMessage(role, content, steps, skills, sessionId) {
     stepsHtml = `<div class="steps"><details><summary>${steps.length} tool call(s)</summary>${stepItems}</details></div>`;
   }
 
-  let skillsHtml = '';
-  if (skills && skills.length > 0) {
-    const badges = skills.map(s => `<span class="skill-badge ${s.type || ''}" title="confidence: ${s.confidence || 0}">${escHtml(s.type || '?')}: ${escHtml(s.title || '')}</span>`).join('');
-    skillsHtml = `<div class="skill-badges">${badges}</div>`;
-  }
-
-  let feedbackHtml = '';
-  if (role === 'assistant' && sessionId) {
-    feedbackHtml = `
-      <div class="feedback-bar">
-        <button class="feedback-btn" onclick="toggleFeedback(this, 'up', '${sessionId}')">&#128077;</button>
-        <button class="feedback-btn" onclick="toggleFeedback(this, 'down', '${sessionId}')">&#128078;</button>
-      </div>
-      <div class="feedback-input">
-        <textarea placeholder="补充反馈（可选）..."></textarea>
-        <button onclick="submitFeedback(this, '${sessionId}')">提交反馈</button>
-      </div>`;
-  }
-
-  div.innerHTML = `<div class="avatar">${avatarText}</div><div><div class="bubble">${escHtml(content)}</div>${stepsHtml}${skillsHtml}${feedbackHtml}</div>`;
+  div.innerHTML = `<div class="avatar">${avatarText}</div><div><div class="bubble">${escHtml(content)}</div>${stepsHtml}</div>`;
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
   return div;
-}
-
-function toggleFeedback(btn, type, sessionId) {
-  const bar = btn.parentElement;
-  const wasActive = btn.classList.contains('active-' + type);
-  bar.querySelectorAll('.feedback-btn').forEach(b => b.classList.remove('active-up', 'active-down'));
-  if (!wasActive) {
-    btn.classList.add('active-' + type);
-    const inputDiv = bar.nextElementSibling;
-    inputDiv.style.display = 'block';
-    inputDiv.dataset.rating = type === 'up' ? '5' : '2';
-  } else {
-    bar.nextElementSibling.style.display = 'none';
-  }
-}
-
-async function submitFeedback(btn, sessionId) {
-  const inputDiv = btn.parentElement;
-  const rating = parseInt(inputDiv.dataset.rating || '3');
-  const comment = inputDiv.querySelector('textarea').value.trim();
-  try {
-    const resp = await fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: displayName, session_id: sessionId, rating, comment }),
-    });
-    const data = await resp.json();
-    if (data.ok) {
-      inputDiv.innerHTML = '<span style="color:#4ade80;font-size:11px;">&#10003; 已提交，感谢反馈！</span>';
-    } else {
-      inputDiv.innerHTML = '<span style="color:#f87171;font-size:11px;">提交失败</span>';
-    }
-  } catch (e) {
-    inputDiv.innerHTML = '<span style="color:#f87171;font-size:11px;">网络错误</span>';
-  }
 }
 
 function addTyping() {
@@ -362,7 +330,8 @@ async function send() {
     const resp = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg, thread_id: threadId, user_id: displayName }),
+      body: JSON.stringify({ message: msg, thread_id: threadId, user_id: displayName,
+                             team_id: config.teamId, agent_id: config.agentId }),
     });
     const data = await resp.json();
     typing.remove();
@@ -371,8 +340,7 @@ async function send() {
       addMessage('system', `Error: ${data.error}`);
     } else {
       threadId = data.thread_id;
-      const sessionId = userId + ':' + threadId;
-      addMessage('assistant', data.response || '(no response)', data.steps, data.injected_skills, sessionId);
+      addMessage('assistant', data.response || '(no response)', data.steps);
     }
   } catch (e) {
     typing.remove();
@@ -398,7 +366,7 @@ async function openMemory() {
     const resp = await fetch('/api/memory', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: displayName }),
+      body: JSON.stringify({ user_id: displayName, team_id: config.teamId, agent_id: config.agentId }),
     });
     const data = await resp.json();
     if (data.error) { body.innerHTML = `<div class="mem-empty">${escHtml(data.error)}</div>`; return; }
@@ -493,7 +461,8 @@ async function savePersona() {
     const resp = await fetch('/api/memory/update', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: displayName, type: 'persona', content }),
+      body: JSON.stringify({ user_id: displayName, type: 'persona', content,
+                             team_id: config.teamId, agent_id: config.agentId }),
     });
     const data = await resp.json();
     if (data.ok) {
@@ -539,6 +508,7 @@ async function saveMemory(idx) {
         user_id: displayName, type: 'memory', id: m.id,
         content: contentEl.value,
         background: bgEl ? bgEl.value : '',
+        team_id: config.teamId, agent_id: config.agentId,
       }),
     });
     const data = await resp.json();
@@ -560,7 +530,8 @@ async function deleteMemory(idx) {
     const resp = await fetch('/api/memory/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: displayName, type: 'memory', id: m.id }),
+      body: JSON.stringify({ user_id: displayName, type: 'memory', id: m.id,
+                             team_id: config.teamId, agent_id: config.agentId }),
     });
     const data = await resp.json();
     if (data.ok) {
@@ -608,6 +579,7 @@ async function saveScenario(idx) {
         user_id: displayName, type: 'scenario', path: s.path,
         content: ta.value,
         summary: summaryEl ? summaryEl.value : '',
+        team_id: config.teamId, agent_id: config.agentId,
       }),
     });
     const data = await resp.json();
@@ -630,7 +602,8 @@ async function editScenario(idx) {
     const resp = await fetch('/api/memory/scenario', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: displayName, path: s.path }),
+      body: JSON.stringify({ user_id: displayName, path: s.path,
+                             team_id: config.teamId, agent_id: config.agentId }),
     });
     const data = await resp.json();
     const content = data.content || '';
