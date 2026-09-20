@@ -5,6 +5,12 @@
 > **开源声明**：本仓库是 [TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)（MIT 许可）的
 > PostgreSQL 存储后端迁移补丁与部署脚本集合。`src/`、`patches/` 中的部分文件修改自上游源码，
 > 许可与衍生关系说明见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。
+>
+> **上游进展**：本仓库的源码级集成已向上游提交
+> PR [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
+> （PostgreSQL 存储后端 + Skill 模块对齐）。该 PR 合并发版后，可直接配置
+> `storeBackend: postgres` 原生使用，无需本仓库的补丁链；在此之前，本文档的
+> 补丁部署方式仍然有效。
 
 ## 1. 概述
 
@@ -222,6 +228,11 @@ memory:
 ---
 
 ## 5. 补丁详情
+
+> 注：以下 8 个补丁面向当前上游容器镜像内的源码布局。上游
+> PR [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
+> 按上游最新目录规范将新增文件置于 `src/core/store/postgres/{memory-store,skill-store}.ts`，
+> 实现与本仓库补丁等价。
 
 ### 5.1 修改的源文件 (8 个)
 

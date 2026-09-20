@@ -7,6 +7,13 @@ English | [简体中文](README.md)
 > [TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
 > (MIT licensed). Some files under `src/` and `patches/` are modified from upstream
 > sources — see [LICENSE](LICENSE) and [NOTICE](NOTICE) for licensing and derivation details.
+>
+> **Upstream status**: the source-level integration has been submitted upstream as
+> PR [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
+> (PostgreSQL storage backend + Skill module alignment). Once that PR is merged and
+> released in an upstream image, `storeBackend: postgres` can be used natively without
+> this patch chain; until then, the patch-based deployment described here remains the
+> working approach.
 
 ## 1. Overview
 
@@ -229,6 +236,12 @@ The container must run with `STORE_MODE=postgres`, injected automatically by
 ---
 
 ## 5. Patch details
+
+> Note: the 8 patches below target the source layout inside the current upstream
+> container image. Upstream PR
+> [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
+> places the new files at `src/core/store/postgres/{memory-store,skill-store}.ts`
+> following the upstream directory convention — functionally equivalent.
 
 ### 5.1 Modified source files (8)
 
