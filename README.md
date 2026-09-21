@@ -8,9 +8,11 @@
 >
 > **上游进展**：本仓库的源码级集成已向上游提交
 > PR [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
-> （PostgreSQL 存储后端 + Skill 模块对齐）。该 PR 合并发版后，可直接配置
-> `storeBackend: postgres` 原生使用，无需本仓库的补丁链；在此之前，本文档的
-> 补丁部署方式仍然有效。
+> （PostgreSQL 存储后端 + Skill 模块对齐）与后续
+> PR [#1466](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1466)
+> （元数据面 PostgreSQL 后端，补齐"全 PG、无 SQLite 依赖"的最后一块）。两个 PR
+> 合并发版后，可直接配置 `storeBackend: postgres` + `TDAI_METADATA_POSTGRES_URI`
+> 原生使用，无需本仓库的补丁链；在此之前，本文档的补丁部署方式仍然有效。
 
 ## 1. 概述
 
@@ -67,7 +69,8 @@ TAM/
 ├── src/                               ← 从容器提取的已修补源码
 │   ├── config.ts                      ← StoreBackend 类型 + PostgresConfig + 配置解析
 │   ├── gateway/
-│   │   └── server.ts                  ← STORE_MODE 环境变量检查
+│   │   ├── server.ts                  ← STORE_MODE 环境变量检查
+│   │   └── metadata-env.ts            ← ★ 新增：TDAI_METADATA_POSTGRES_URI 环境变量注入
 │   ├── utils/
 │   │   └── manifest.ts                ← StoreConfigSnapshot + ManifestStoreInfo 类型
 │   ├── core/
@@ -78,6 +81,13 @@ TAM/
 │   │       ├── pg-store.ts            ← ★ 新增：PG 存储实现 (IMemoryStore + getPgPool 逃生舱)
 │   │       ├── factory.ts             ← createStoreBundle 加 postgres case
 │   │       └── store-pool.ts          ← StoreMode + createPostgresStore + getStore 分支
+│   ├── metadata/                      ← ★ 新增：元数据面 (v3 metadata) PG 后端
+│   │   └── store/
+│   │       ├── postgres-adapter.ts    ← ★ 新增：PostgresMetadataStore (schema-per-instance)
+│   │       ├── interface.ts           ← MetadataBackend 类型加 "postgres"
+│   │       ├── db-name.ts             ← resolvePostgresSchemaName (63 字节截断)
+│   │       ├── factory.ts             ← createMetadataStore postgres case + 三选一互斥
+│   │       └── relation-id-insert.ts  ← PG 唯一冲突 (23505) 按 pkey 约束名识别
 ├── patches/                           ← 补丁文件 + 打补丁脚本
 │   ├── pg-store.ts                    ← 同 src/core/store/pg-store.ts (部署用)
 │   ├── config.ts                      ← 同 src/config.ts (部署用)
@@ -87,6 +97,12 @@ TAM/
 │   ├── server.ts                      ← 同 src/gateway/server.ts (部署用)
 │   ├── tdai-core.ts                   ← 同 src/core/tdai-core.ts (部署用)
 │   ├── pg-skill-store.ts              ← 同 src/core/skill/pg-skill-store.ts (部署用)
+│   ├── pg-metadata-store.ts           ← 同 src/metadata/store/postgres-adapter.ts (部署用)
+│   ├── metadata-interface.ts          ← 同 src/metadata/store/interface.ts (部署用)
+│   ├── metadata-db-name.ts            ← 同 src/metadata/store/db-name.ts (部署用)
+│   ├── metadata-factory.ts            ← 同 src/metadata/store/factory.ts (部署用)
+│   ├── metadata-relation-id-insert.ts ← 同 src/metadata/store/relation-id-insert.ts (部署用)
+│   ├── gateway-metadata-env.ts        ← 同 src/gateway/metadata-env.ts (部署用)
 │   ├── pg-store-original.ts           ← 原始合并版 pg-store.ts (未应用 bugfix)
 │   ├── patch-all.js                   ← 主补丁脚本 (config/factory/store-pool)
 │   ├── fix-factory.js                 ← factory.ts postgres case 插入
@@ -108,7 +124,7 @@ TAM/
 │   ├── start-memory-hub.sh            ← 启动 panel UI
 │   ├── start-proxy.sh                 ← 启动 proxy
 │   ├── stop-all.sh                    ← 停止全部服务
-│   ├── apply-pg-patches.sh            ← ★ 自动应用 PG 迁移补丁 (8 个文件)
+│   ├── apply-pg-patches.sh            ← ★ 自动应用 PG 迁移补丁 (14 个文件)
 │   ├── _lib.sh                        ← 部署库函数
 │   └── verify.sh                      ← 部署验证脚本
 ├── db/
@@ -210,6 +226,11 @@ EMBEDDING_SEND_DIMENSIONS=false
 
 # 数据卷
 MEMORY_CORE_VOLUME=tdai-memory-core-data
+
+# 元数据面（v3 metadata）PG 后端
+# 不配置/留空 = 复用上面的 PG_CONNECTION_STRING（默认全 PG）；
+# 显式置为空字符串 = 回退容器 volume 内 SQLite。
+# METADATA_PG_CONNECTION_STRING=
 ```
 
 #### tdai-gateway.yaml PG 配置（由 start-memory-core.sh 从 .env 自动生成）
@@ -229,12 +250,14 @@ memory:
 
 ## 5. 补丁详情
 
-> 注：以下 8 个补丁面向当前上游容器镜像内的源码布局。上游
-> PR [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
-> 按上游最新目录规范将新增文件置于 `src/core/store/postgres/{memory-store,skill-store}.ts`，
-> 实现与本仓库补丁等价。
+> 注：以下 14 个补丁面向当前上游容器镜像内的源码布局（§5.1 存储面 8 个 + §5.4 元数据面
+> 6 个）。上游 PR [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
+> 按上游最新目录规范将存储面新增文件置于 `src/core/store/postgres/{memory-store,skill-store}.ts`；
+> 元数据面 PG 化已提交上游 PR
+> [#1466](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1466)
+> （`src/metadata/store/postgres-adapter.ts`）。实现均与本仓库补丁等价。
 
-### 5.1 修改的源文件 (8 个)
+### 5.1 存储面：修改的源文件 (8 个)
 
 | 文件 | 容器路径 | 修改内容 |
 |------|----------|----------|
@@ -280,17 +303,49 @@ Skill wiring（日志 `Skill wiring skipped`）。
 
 ```
 1. 生成 tdai-gateway.yaml (含 storeBackend: postgres + connectionString)
-2. docker run 创建容器 (含 STORE_MODE=postgres)
+2. docker run 创建容器 (含 STORE_MODE=postgres + TDAI_METADATA_POSTGRES_URI)
 3. 等待容器健康
 4. 应用 sendDimensions hotfix (sed 插入 + 重启)
 5. 调用 apply-pg-patches.sh:
    a. npm install pg --save
-   b. docker cp 8 个补丁文件到容器
+   b. docker cp 14 个补丁文件到容器 (存储面 8 + 元数据面 6, 见 §5.4)
    c. docker restart
    d. 等待健康检查
 6. 初始化 admin user
 7. 验证 admin key
 ```
+
+### 5.4 元数据面 PG 化（pg-metadata，6 个文件）
+
+v3 metadata（user/team/agent/task/asset/acl 等实体与关系，含 admin user_key、实例注册）
+原本只有 SQLite / MongoDB 两个后端——即使存储面已切 PG，元数据仍落在容器 volume 内的
+SQLite 文件里。本组补丁新增 `PostgresMetadataStore`（实现容器版完整 `IMetadataStore`
+接口），实现**全 PG 部署、无 SQLite 依赖**。
+
+| 文件 | 容器路径 | 修改内容 |
+|------|----------|----------|
+| `pg-metadata-store.ts` | `/app/src/metadata/store/postgres-adapter.ts` | **新增**：`PostgresMetadataStore`；SQL 方言自动转换（`?`→`$n`、`meta_*` 表名自动加 schema 前缀、`INSERT OR IGNORE`→`ON CONFLICT DO NOTHING`、COUNT 的 bigint→Number） |
+| `metadata-interface.ts` | `/app/src/metadata/store/interface.ts` | `MetadataBackend` 类型加 `"postgres"` |
+| `metadata-db-name.ts` | `/app/src/metadata/store/db-name.ts` | 新增 `resolvePostgresSchemaName()`（实例 id 清洗 + PG 标识符 63 字节截断） |
+| `metadata-factory.ts` | `/app/src/metadata/store/factory.ts` | `createMetadataStore` 加 postgres case；mongo/sqlite/postgres 环境变量三选一互斥；多实例共享 `pg.Pool`；`purgeInstance` = `DROP SCHEMA ... CASCADE` |
+| `metadata-relation-id-insert.ts` | `/app/src/metadata/store/relation-id-insert.ts` | 关系表 id 冲突按 PG 唯一约束名（SQLSTATE 23505）识别 |
+| `gateway-metadata-env.ts` | `/app/src/gateway/metadata-env.ts` | 环境变量 `TDAI_METADATA_POSTGRES_URI` 注入（不覆盖 YAML 已有配置） |
+
+关键设计：
+
+- **schema-per-instance**：每个 gateway 实例一个独立 schema `tdai_metadata_<instance_id>`
+  （默认 `tdai_metadata_default`），DDL 由适配器首次使用时自动创建，无需手工执行；
+  `purgeInstance` 即 `DROP SCHEMA ... CASCADE`。与存储面 9 张表同库共存。
+- **配置**：`deploy/.env` 的 `METADATA_PG_CONNECTION_STRING`。留空/不配置 = 复用
+  `PG_CONNECTION_STRING`（默认全 PG）；显式置为空字符串 = 回退容器 volume 内 SQLite。
+  部署脚本以 `-e TDAI_METADATA_POSTGRES_URI` 注入容器。
+- **admin key**：`init-admin` 创建的 admin 用户及其 `user_key`（`deploy/.admin-key`）
+  现落在 PG 的 `meta_users` / `meta_user_keys` 表，容器 volume 重建后依然有效；反之
+  `stop-all.sh --purge` 只清 volume，PG 侧需手动 DROP schema（见 §8.5）。
+- **验证**：适配器对容器版 metadata 契约测试套件通过 46/46（与 SQLite 后端行为对齐）。
+
+上游进展：元数据面 PG 化已提交上游 PR
+[#1466](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1466)。
 
 ---
 
@@ -321,6 +376,24 @@ Skill wiring（日志 `Skill wiring skipped`）。
 - **FTS 搜索**: `tsvector` + `websearch_to_tsquery('simple', $query)` + `ts_rank` 排序
 - **向量搜索**: `embedding <=> $query_vector::vector` (cosine distance)
 - **混合搜索**: FTS + vector 并行搜索，合并结果
+
+### 6.4 元数据面 Schema（PG）
+
+上表 9 张表属于存储面（memory plane）。元数据面切 PG 后（见 §5.4），适配器自动在
+**同一个 `tdai_memory` 库**内按实例建 schema（默认 `tdai_metadata_default`，DDL 自动
+执行），主要表：
+
+| 表名 | 说明 |
+|------|------|
+| `meta_users` / `meta_user_keys` | 用户 + user_key 凭据（admin key 落在此） |
+| `meta_teams` / `meta_team_members` | 团队 + 成员关系 |
+| `meta_agents` / `meta_tasks` / `meta_task_agents` | Agent / 任务实体 + 任务-Agent 关系 |
+| `meta_participation_logs` | 参与日志 |
+| `meta_assets` / `meta_agent_fixed_assets` / `meta_asset_acl` | 资产 + Agent 绑定 + ACL |
+| `meta_config_params` | 实例注册 + 配置参数 |
+
+查看：`psql -d tdai_memory -c '\dn'` 列出 schema；
+`SELECT username FROM tdai_metadata_default.meta_users;`。
 
 ---
 
@@ -385,6 +458,14 @@ p.query('SELECT COUNT(*) FROM l1_records').then(r=>{console.log('L1:',r.rows[0].
 "
 ```
 
+元数据面（schema 列表 + admin 用户）：
+
+```bash
+psql "postgres://postgres:<password>@<pg-host>:5432/tdai_memory" \
+  -c '\dn' \
+  -c 'SELECT username, status FROM tdai_metadata_default.meta_users;'
+```
+
 ### 8.3 容器重建后补丁丢失？
 
 如果手动 `docker rm` 容器，重新执行 `start-memory-core.sh` 会自动重新应用所有补丁。
@@ -395,6 +476,19 @@ p.query('SELECT COUNT(*) FROM l1_records').then(r=>{console.log('L1:',r.rows[0].
 1. YAML 配置中 `storeBackend: postgres` → `storeBackend: sqlite`
 2. 删除 `STORE_MODE=postgres` 环境变量
 3. 注释掉 `apply-pg-patches.sh` 调用
+4. 元数据面回退 SQLite：`.env` 里显式设置 `METADATA_PG_CONNECTION_STRING=`（空字符串）
+
+### 8.5 清理元数据面数据
+
+`stop-all.sh --purge` 只删除 Docker volume——存储面 PG 表与元数据面 PG schema 均不受
+影响。如需彻底清空元数据面：
+
+```sql
+DROP SCHEMA IF EXISTS tdai_metadata_default CASCADE;
+```
+
+删除后重启（`start-memory-core.sh`）会重建 schema，但 admin 用户需重新 init——记得同时
+删掉 `deploy/.admin-key`，否则会拿到已失效的旧 key。
 
 ---
 
@@ -403,6 +497,7 @@ p.query('SELECT COUNT(*) FROM l1_records').then(r=>{console.log('L1:',r.rows[0].
 1. ~~**Skill wiring 跳过**~~ **已解决**：PG 后端此前不支持 SQLite 特有的 `getRawDb()` 接口而跳过 Skill 模块；现已通过 `pg-store.ts` 的 `getPgPool()` 逃生舱 + `pg-skill-store.ts` 实现完整对齐（见 §5.2）
 2. **容器内补丁非持久化**: 通过 `docker commit` 自行固化的镜像可包含补丁，但用原始镜像每次重建容器都需要重新应用（`start-memory-core.sh` 会自动完成）
 3. **jieba 分词**: FTS 使用 `tokenizeForFts` (jieba) 分词后存入 `message_segmented`，再生成 `tsvector`；查询时同样分词后用 `websearch_to_tsquery('simple', ...)`
+4. **容器版元数据模块较旧**: 容器镜像内 metadata 模块早于上游 HEAD，`postgres-adapter.ts` 按容器版 `IMetadataStore` 接口适配——不含 `DuplicateUserKeyError`（user_key 撞车时返回原始唯一约束错误）与 `InstanceUpstreamConfig` 实例上游配置域（容器版无此接口）。上游合并 PR #1466 后的新镜像将以完整版覆盖
 
 ---
 

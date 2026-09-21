@@ -131,6 +131,9 @@ skill:
 YAML
 
 info "启动 memory-core (image=$MEMORY_CORE_IMAGE, port=$MEMORY_CORE_PORT)"
+# 元数据面（v3 metadata：user/team/agent/task/asset/acl 等）默认与存储面共用同一个 PG
+# （TDAI_METADATA_POSTGRES_URI，每实例一个 schema：tdai_metadata_<instance_id>）。
+# 如需回退容器 volume 内 SQLite，在 .env 里把 METADATA_PG_CONNECTION_STRING 显式置空。
 $DOCKER run -d --name "$CONTAINER" \
   --network "$NETWORK" \
   --network-alias memory-core \
@@ -142,6 +145,7 @@ $DOCKER run -d --name "$CONTAINER" \
   -e TDAI_GATEWAY_API_KEY="$MEMORY_CORE_GATEWAY_API_KEY" \
   -e TDAI_DATA_DIR=/data/tdai-memory \
   -e STORE_MODE=postgres \
+  -e TDAI_METADATA_POSTGRES_URI="${METADATA_PG_CONNECTION_STRING-$PG_CONNECTION_STRING}" \
   "$MEMORY_CORE_IMAGE" >/dev/null
 
 wait_healthy "$CONTAINER" 90

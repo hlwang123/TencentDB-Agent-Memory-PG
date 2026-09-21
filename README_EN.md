@@ -10,10 +10,12 @@ English | [简体中文](README.md)
 >
 > **Upstream status**: the source-level integration has been submitted upstream as
 > PR [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
-> (PostgreSQL storage backend + Skill module alignment). Once that PR is merged and
-> released in an upstream image, `storeBackend: postgres` can be used natively without
-> this patch chain; until then, the patch-based deployment described here remains the
-> working approach.
+> (PostgreSQL storage backend + Skill module alignment), followed by
+> PR [#1466](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1466)
+> (PostgreSQL metadata backend — the last piece for a full-PG deployment with no SQLite
+> dependency). Once both PRs are merged and released in an upstream image, `storeBackend:
+> postgres` + `TDAI_METADATA_POSTGRES_URI` can be used natively without this patch chain;
+> until then, the patch-based deployment described here remains the working approach.
 
 ## 1. Overview
 
@@ -71,7 +73,8 @@ TAM/
 ├── src/                               ← Patched sources extracted from the container
 │   ├── config.ts                      ← StoreBackend type + PostgresConfig + config parsing
 │   ├── gateway/
-│   │   └── server.ts                  ← STORE_MODE env var check
+│   │   ├── server.ts                  ← STORE_MODE env var check
+│   │   └── metadata-env.ts            ← ★ NEW: TDAI_METADATA_POSTGRES_URI env injection
 │   ├── utils/
 │   │   └── manifest.ts                ← StoreConfigSnapshot + ManifestStoreInfo types
 │   ├── core/
@@ -82,6 +85,13 @@ TAM/
 │   │       ├── pg-store.ts            ← ★ NEW: PG storage (IMemoryStore + getPgPool() escape hatch)
 │   │       ├── factory.ts             ← createStoreBundle adds postgres case
 │   │       └── store-pool.ts          ← StoreMode + createPostgresStore + getStore branch
+│   ├── metadata/                      ← ★ NEW: metadata plane (v3 metadata) PG backend
+│   │   └── store/
+│   │       ├── postgres-adapter.ts    ← ★ NEW: PostgresMetadataStore (schema-per-instance)
+│   │       ├── interface.ts           ← MetadataBackend type adds "postgres"
+│   │       ├── db-name.ts             ← resolvePostgresSchemaName (63-byte truncation)
+│   │       ├── factory.ts             ← createMetadataStore postgres case + 3-way exclusivity
+│   │       └── relation-id-insert.ts  ← PG unique-violation (23505) detection via pkey names
 ├── patches/                           ← Patch files + patching scripts
 │   ├── pg-store.ts                    ← Same as src/core/store/pg-store.ts (for deployment)
 │   ├── config.ts                      ← Same as src/config.ts (for deployment)
@@ -91,6 +101,12 @@ TAM/
 │   ├── server.ts                      ← Same as src/gateway/server.ts (for deployment)
 │   ├── tdai-core.ts                   ← Same as src/core/tdai-core.ts (for deployment)
 │   ├── pg-skill-store.ts              ← Same as src/core/skill/pg-skill-store.ts (for deployment)
+│   ├── pg-metadata-store.ts           ← Same as src/metadata/store/postgres-adapter.ts (for deployment)
+│   ├── metadata-interface.ts          ← Same as src/metadata/store/interface.ts (for deployment)
+│   ├── metadata-db-name.ts            ← Same as src/metadata/store/db-name.ts (for deployment)
+│   ├── metadata-factory.ts            ← Same as src/metadata/store/factory.ts (for deployment)
+│   ├── metadata-relation-id-insert.ts ← Same as src/metadata/store/relation-id-insert.ts (for deployment)
+│   ├── gateway-metadata-env.ts        ← Same as src/gateway/metadata-env.ts (for deployment)
 │   ├── pg-store-original.ts           ← Original merged pg-store.ts (before bugfixes)
 │   ├── patch-all.js                   ← Main patch script (config/factory/store-pool)
 │   ├── fix-factory.js                 ← factory.ts postgres case insertion
@@ -112,7 +128,7 @@ TAM/
 │   ├── start-memory-hub.sh            ← Start panel UI
 │   ├── start-proxy.sh                 ← Start proxy
 │   ├── stop-all.sh                    ← Stop all services
-│   ├── apply-pg-patches.sh            ← ★ Auto-apply PG migration patches (8 files)
+│   ├── apply-pg-patches.sh            ← ★ Auto-apply PG migration patches (14 files)
 │   ├── _lib.sh                        ← Deployment helper functions
 │   └── verify.sh                      ← Deployment verification script
 ├── db/
@@ -217,6 +233,11 @@ EMBEDDING_SEND_DIMENSIONS=false
 
 # Data volume
 MEMORY_CORE_VOLUME=tdai-memory-core-data
+
+# Metadata plane (v3 metadata) PG backend
+# Unset/empty = reuse PG_CONNECTION_STRING above (full-PG default);
+# explicitly set to an empty string to fall back to SQLite in the container volume.
+# METADATA_PG_CONNECTION_STRING=
 ```
 
 #### tdai-gateway.yaml PG section (auto-generated from .env by start-memory-core.sh)
@@ -237,13 +258,16 @@ The container must run with `STORE_MODE=postgres`, injected automatically by
 
 ## 5. Patch details
 
-> Note: the 8 patches below target the source layout inside the current upstream
-> container image. Upstream PR
-> [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
-> places the new files at `src/core/store/postgres/{memory-store,skill-store}.ts`
-> following the upstream directory convention — functionally equivalent.
+> Note: the 14 patches below target the source layout inside the current upstream
+> container image (§5.1 storage plane: 8 files + §5.4 metadata plane: 6 files).
+> Upstream PR [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
+> places the new storage-plane files at
+> `src/core/store/postgres/{memory-store,skill-store}.ts` following the upstream
+> directory convention; the metadata-plane PG backend has been submitted as upstream
+> PR [#1466](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1466)
+> (`src/metadata/store/postgres-adapter.ts`). All functionally equivalent.
 
-### 5.1 Modified source files (8)
+### 5.1 Storage plane: modified source files (8)
 
 | File | Container path | Change |
 |------|----------------|--------|
@@ -292,17 +316,55 @@ English BM25 search/duplicate-name conflict/physical delete + PG table checks;
 
 ```
 1. Generate tdai-gateway.yaml (with storeBackend: postgres + connectionString)
-2. docker run to create the container (with STORE_MODE=postgres)
+2. docker run to create the container (with STORE_MODE=postgres + TDAI_METADATA_POSTGRES_URI)
 3. Wait for container health
 4. Apply sendDimensions hotfix (sed insertion + restart)
 5. Call apply-pg-patches.sh:
    a. npm install pg --save
-   b. docker cp the 8 patch files into the container
+   b. docker cp the 14 patch files into the container (8 storage-plane + 6 metadata-plane, see §5.4)
    c. docker restart
    d. Wait for health check
 6. Initialize the admin user
 7. Verify the admin key
 ```
+
+### 5.4 Metadata plane PG backend (pg-metadata, 6 files)
+
+The v3 metadata plane (users/teams/agents/tasks/assets/ACLs and their relations, including
+the admin user_key and instance registration) originally had only SQLite / MongoDB backends —
+even with the storage plane on PG, metadata still lived in a SQLite file inside the container
+volume. This patch set adds `PostgresMetadataStore` (implementing the container-version
+`IMetadataStore` interface in full), enabling a **full-PG deployment with no SQLite
+dependency**.
+
+| File | Container path | Change |
+|------|----------------|--------|
+| `pg-metadata-store.ts` | `/app/src/metadata/store/postgres-adapter.ts` | **NEW**: `PostgresMetadataStore`; automatic SQL dialect conversion (`?`→`$n`, schema-prefix injection for `meta_*` tables, `INSERT OR IGNORE`→`ON CONFLICT DO NOTHING`, bigint COUNT→Number) |
+| `metadata-interface.ts` | `/app/src/metadata/store/interface.ts` | `MetadataBackend` type adds `"postgres"` |
+| `metadata-db-name.ts` | `/app/src/metadata/store/db-name.ts` | New `resolvePostgresSchemaName()` (instance-id sanitizing + PG 63-byte identifier truncation) |
+| `metadata-factory.ts` | `/app/src/metadata/store/factory.ts` | `createMetadataStore` postgres case; mongo/sqlite/postgres env vars are mutually exclusive; shared `pg.Pool`; `purgeInstance` = `DROP SCHEMA ... CASCADE` |
+| `metadata-relation-id-insert.ts` | `/app/src/metadata/store/relation-id-insert.ts` | Relation-table id collisions detected via PG unique-constraint names (SQLSTATE 23505) |
+| `gateway-metadata-env.ts` | `/app/src/gateway/metadata-env.ts` | `TDAI_METADATA_POSTGRES_URI` env injection (does not override existing YAML config) |
+
+Key design points:
+
+- **Schema-per-instance**: each gateway instance gets its own schema
+  `tdai_metadata_<instance_id>` (default `tdai_metadata_default`). DDL is created
+  automatically by the adapter on first use — no manual steps; `purgeInstance` is simply
+  `DROP SCHEMA ... CASCADE`. Coexists with the 9 storage-plane tables in the same database.
+- **Configuration**: `METADATA_PG_CONNECTION_STRING` in `deploy/.env`. Unset/empty = reuse
+  `PG_CONNECTION_STRING` (full-PG by default); explicitly set to an empty string = fall back
+  to SQLite inside the container volume. The deployment script injects it into the container
+  as `-e TDAI_METADATA_POSTGRES_URI`.
+- **Admin key**: the admin user created by `init-admin` and its `user_key`
+  (`deploy/.admin-key`) now live in the PG tables `meta_users` / `meta_user_keys`, surviving
+  container-volume rebuilds; conversely `stop-all.sh --purge` only clears the volume — the
+  PG-side schema must be dropped manually (see §8.5).
+- **Validation**: the adapter passes 46/46 tests of the container-version metadata contract
+  suite (behavior-aligned with the SQLite backend).
+
+Upstream status: the metadata-plane PG backend has been submitted as upstream PR
+[#1466](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1466).
 
 ---
 
@@ -333,6 +395,24 @@ English BM25 search/duplicate-name conflict/physical delete + PG table checks;
 - **FTS search**: `tsvector` + `websearch_to_tsquery('simple', $query)` ranked by `ts_rank`
 - **Vector search**: `embedding <=> $query_vector::vector` (cosine distance)
 - **Hybrid search**: FTS + vector in parallel, results merged
+
+### 6.4 Metadata plane schema (PG)
+
+The 9 tables above belong to the storage plane (memory plane). With the metadata plane on PG
+(see §5.4), the adapter automatically creates per-instance schemas in the **same `tdai_memory`
+database** (default `tdai_metadata_default`, DDL executed automatically). Main tables:
+
+| Table | Purpose |
+|-------|---------|
+| `meta_users` / `meta_user_keys` | Users + user_key credentials (the admin key lives here) |
+| `meta_teams` / `meta_team_members` | Teams + membership relations |
+| `meta_agents` / `meta_tasks` / `meta_task_agents` | Agent / task entities + task-agent relations |
+| `meta_participation_logs` | Participation logs |
+| `meta_assets` / `meta_agent_fixed_assets` / `meta_asset_acl` | Assets + agent bindings + ACLs |
+| `meta_config_params` | Instance registration + config params |
+
+Inspect with `psql -d tdai_memory -c '\dn'` (list schemas) and
+`SELECT username FROM tdai_metadata_default.meta_users;`.
 
 ---
 
@@ -398,6 +478,14 @@ p.query('SELECT COUNT(*) FROM l1_records').then(r=>{console.log('L1:',r.rows[0].
 "
 ```
 
+Metadata plane (list schemas + admin user):
+
+```bash
+psql "postgres://postgres:<password>@<pg-host>:5432/tdai_memory" \
+  -c '\dn' \
+  -c 'SELECT username, status FROM tdai_metadata_default.meta_users;'
+```
+
 ### 8.3 Patches lost after container rebuild?
 
 If you manually `docker rm` the container, re-running `start-memory-core.sh` re-applies
@@ -409,6 +497,20 @@ Edit `.env` or `start-memory-core.sh`:
 1. In the YAML config: `storeBackend: postgres` → `storeBackend: sqlite`
 2. Remove the `STORE_MODE=postgres` environment variable
 3. Comment out the `apply-pg-patches.sh` invocation
+4. Metadata plane fallback to SQLite: explicitly set `METADATA_PG_CONNECTION_STRING=` (empty string) in `.env`
+
+### 8.5 Purging metadata-plane data
+
+`stop-all.sh --purge` only deletes the Docker volume — neither the storage-plane PG tables
+nor the metadata-plane PG schema is affected. To wipe the metadata plane entirely:
+
+```sql
+DROP SCHEMA IF EXISTS tdai_metadata_default CASCADE;
+```
+
+After the drop, a restart (`start-memory-core.sh`) recreates the schema, but the admin user
+must be re-initialized — remember to also delete `deploy/.admin-key`, otherwise you will be
+left with a stale key.
 
 ---
 
@@ -423,6 +525,12 @@ Edit `.env` or `start-memory-core.sh`:
 3. **jieba tokenization**: FTS stores `tokenizeForFts` (jieba) segmented text in
    `message_segmented`, then builds the `tsvector` from it; queries are segmented the
    same way before `websearch_to_tsquery('simple', ...)`.
+4. **Container metadata module is older than upstream HEAD**: the metadata module inside
+   the container image predates upstream HEAD, so `postgres-adapter.ts` is adapted to the
+   container-version `IMetadataStore` interface — it does not include `DuplicateUserKeyError`
+   (user_key collisions surface the raw unique-constraint error) or the
+   `InstanceUpstreamConfig` domain (not present in the container version). A newer upstream
+   image after PR #1466 merges will ship the full version.
 
 ---
 
