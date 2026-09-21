@@ -1,9 +1,10 @@
-# TDAI Memory Core — PostgreSQL 迁移部署文档
+# TDAI Memory Core — 全 PostgreSQL 迁移部署文档
 
 [English](README_EN.md) | 简体中文
 
 > **开源声明**：本仓库是 [TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)（MIT 许可）的
-> PostgreSQL 存储后端迁移补丁与部署脚本集合。`src/`、`patches/` 中的部分文件修改自上游源码，
+> PostgreSQL 迁移补丁与部署脚本集合——覆盖存储面、Skill 模块与元数据面，实现
+> 全 PG 部署、无 SQLite 依赖。`src/`、`patches/` 中的部分文件修改自上游源码，
 > 许可与衍生关系说明见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。
 >
 > **上游进展**：本仓库的源码级集成已向上游提交
@@ -16,7 +17,13 @@
 
 ## 1. 概述
 
-本文档描述如何将 TDAI Memory Core 的存储后端从 SQLite（sqlite-vec + FTS5）迁移到 PostgreSQL 16 + pgvector + tsvector。
+本文档描述如何将 TDAI Memory Core 从 SQLite 完整迁移到 PostgreSQL 16 + pgvector + tsvector，覆盖三个层面：
+
+1. **存储面**（L0/L1 记忆 + FTS/向量混合检索，§5.1）
+2. **Skill 模块**（程序性记忆：技能/经验的存取与版本管理，§5.2）
+3. **元数据面**（v3 metadata：用户/团队/Agent/资产/ACL 等，含 admin user_key，§5.4）
+
+三者全部落 PG 后即实现**全 PG 部署、无 SQLite 依赖**——数据不再锁死在容器 volume 内，可备份、可高可用、可 SQL 直查。
 
 ### 1.1 架构
 
@@ -25,6 +32,7 @@
 │  Panel UI    │────▶│  Memory Core (8420)      │────▶│  PostgreSQL 16  │
 │  (18125)     │     │  agentmemory/memory-core  │     │  <pg-host>      │
 └──────────────┘     │  storeBackend=postgres    │     │  tdai_memory DB │
+                     │  metadata=postgres        │     │  + meta schemas │
                      │  pgvector + tsvector      │     │  pgvector 0.8.2 │
 ┌──────────────┐     └──────────────────────────┘     └─────────────────┘
 │  Embedding   │               ▲
@@ -39,7 +47,7 @@
 
 | 组件 | 镜像/版本 | 端口 | 说明 |
 |------|-----------|------|------|
-| Memory Core | `agentmemory/memory-core:latest` | 8420 | 记忆网关，PG 后端 |
+| Memory Core | `agentmemory/memory-core:latest` | 8420 | 记忆网关，全 PG 后端（存储 + 元数据） |
 | Memory Hub | `agentmemory/memory-hub:latest` | 18125 | Panel UI |
 | Memory Proxy | `agentmemory/memory-proxy:latest` | 8096 | Claude Code 代理 |
 | Embedding | BGE-M3 (本地) | 8121 | 向量嵌入服务 |
@@ -350,6 +358,8 @@ SQLite 文件里。本组补丁新增 `PostgresMetadataStore`（实现容器版�
 ---
 
 ## 6. 数据库 Schema
+
+> 存储面 9 张表由 `db/schema.sql` 创建；元数据面按实例自动建 schema（见 §6.4）。
 
 ### 6.1 表结构
 

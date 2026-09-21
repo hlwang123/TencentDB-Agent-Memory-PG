@@ -1,12 +1,14 @@
-# TDAI Memory Core — PostgreSQL Migration & Deployment Guide
+# TDAI Memory Core — Full-PostgreSQL Migration & Deployment Guide
 
 English | [简体中文](README.md)
 
-> **Open-source notice**: This repository is a collection of PostgreSQL storage-backend
-> migration patches and deployment scripts for
+> **Open-source notice**: This repository is a collection of PostgreSQL migration
+> patches and deployment scripts for
 > [TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
-> (MIT licensed). Some files under `src/` and `patches/` are modified from upstream
-> sources — see [LICENSE](LICENSE) and [NOTICE](NOTICE) for licensing and derivation details.
+> (MIT licensed) — covering the storage plane, the Skill module, and the metadata
+> plane for a full-PG deployment with no SQLite dependency. Some files under `src/`
+> and `patches/` are modified from upstream sources — see [LICENSE](LICENSE) and
+> [NOTICE](NOTICE) for licensing and derivation details.
 >
 > **Upstream status**: the source-level integration has been submitted upstream as
 > PR [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
@@ -19,8 +21,17 @@ English | [简体中文](README.md)
 
 ## 1. Overview
 
-This guide describes how to migrate the TDAI Memory Core storage backend from SQLite
-(sqlite-vec + FTS5) to PostgreSQL 16 + pgvector + tsvector.
+This guide describes how to migrate TDAI Memory Core from SQLite to PostgreSQL 16 +
+pgvector + tsvector in full, covering three planes:
+
+1. **Storage plane** (L0/L1 memories + hybrid FTS/vector retrieval, §5.1)
+2. **Skill module** (procedural memory: skill/experience storage and versioning, §5.2)
+3. **Metadata plane** (v3 metadata: users/teams/agents/assets/ACLs, incl. the admin
+   user_key, §5.4)
+
+With all three on PostgreSQL you get a **full-PG deployment with no SQLite dependency** —
+data is no longer locked inside the container volume: it becomes backupable,
+highly available, and directly queryable via SQL.
 
 ### 1.1 Architecture
 
@@ -29,6 +40,7 @@ This guide describes how to migrate the TDAI Memory Core storage backend from SQ
 │  Panel UI    │────▶│  Memory Core (8420)      │────▶│  PostgreSQL 16  │
 │  (18125)     │     │  agentmemory/memory-core  │     │  <pg-host>      │
 └──────────────┘     │  storeBackend=postgres    │     │  tdai_memory DB │
+                     │  metadata=postgres        │     │  + meta schemas │
                      │  pgvector + tsvector      │     │  pgvector 0.8.2 │
 ┌──────────────┐     └──────────────────────────┘     └─────────────────┘
 │  Embedding   │               ▲
@@ -43,7 +55,7 @@ This guide describes how to migrate the TDAI Memory Core storage backend from SQ
 
 | Component | Image / Version | Port | Purpose |
 |-----------|-----------------|------|---------|
-| Memory Core | `agentmemory/memory-core:latest` | 8420 | Memory gateway, PG backend |
+| Memory Core | `agentmemory/memory-core:latest` | 8420 | Memory gateway, full-PG backend (storage + metadata) |
 | Memory Hub | `agentmemory/memory-hub:latest` | 18125 | Panel UI |
 | Memory Proxy | `agentmemory/memory-proxy:latest` | 8096 | Claude Code proxy |
 | Embedding | BGE-M3 (local) | 8121 | Vector embedding service |
@@ -369,6 +381,9 @@ Upstream status: the metadata-plane PG backend has been submitted as upstream PR
 ---
 
 ## 6. Database schema
+
+> The 9 storage-plane tables are created by `db/schema.sql`; metadata-plane schemas are
+> created automatically per instance (see §6.4).
 
 ### 6.1 Tables
 
