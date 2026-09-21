@@ -153,6 +153,7 @@ PostgreSQL 上。
 - **数据规模**：数百条 L0 对话（含带 BGE-M3 向量的历史导入）、L1 提取正常入库
 - **功能**：混合检索（FTS+向量）、persona 读写、场景块、记忆增删改查全部通过 E2E 测试
 - **Skill 模块**：`skill-e2e.sh` / `skill-extract-e2e.sh` 全链路通过——CRUD、版本管理、中英文 BM25 检索、对话提取生均正常
+- **元数据面**：v3 metadata 已切 PG（每实例一个 `tdai_metadata_*` schema，DDL 自动创建），admin user_key 落库、容器 volume 重建后依然有效；容器版契约测试 46/46 通过——**全 PG 部署、无 SQLite 残留**
 - **多轮记忆**：Agent 跨轮正确回忆用户姓名/职业/爱好（L1 提取 ~10 分钟后生效）
 - **已知限制**：容器重建需重放补丁（`start-memory-core.sh` 自动完成）
 
@@ -164,5 +165,5 @@ PostgreSQL 上。
 |------|------|
 | npm 包（官方描述/SDK） | `@tencentdb-agent-memory/memory-tencentdb-v2`、`memory-sdk-ts-v2` |
 | 官方源码 | 容器内 `/app/src/`（上游 GitHub 仓库） |
-| 本仓库补丁 | `patches/`（含 pg-store / pg-skill-store / tdai-core） |
+| 本仓库补丁 | `patches/`（14 个文件：pg-store / pg-skill-store / pg-metadata-store 等） |
 | 部署文档 | 仓库根目录 `README.md` |
