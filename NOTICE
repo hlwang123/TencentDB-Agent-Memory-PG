@@ -1,5 +1,6 @@
-This project provides PostgreSQL (pgvector + tsvector) storage backend support
-and deployment tooling for TencentDB Agent Memory.
+This project provides full-PostgreSQL (pgvector + tsvector) storage support — storage
+plane, Skill module, and metadata plane — plus deployment tooling for TencentDB
+Agent Memory.
 
 Upstream project
 ----------------
@@ -12,10 +13,16 @@ The following files are modified versions of files from the upstream project
 (both the copy under src/ and the deployment copy under patches/):
 
   - gateway/server.ts
+  - gateway/metadata-env.ts
   - config.ts
+  - core/tdai-core.ts
   - core/store/factory.ts
   - core/store/store-pool.ts
   - utils/manifest.ts
+  - metadata/store/interface.ts
+  - metadata/store/db-name.ts
+  - metadata/store/factory.ts
+  - metadata/store/relation-id-insert.ts
 
 Original works
 --------------
@@ -23,11 +30,16 @@ All other files in this repository are original to this project, including:
 
   - core/store/pg-store.ts — new PostgreSQL implementation of the IMemoryStore
     interface (patches/pg-store-original.ts is its pre-bugfix revision)
+  - core/skill/pg-skill-store.ts — new PostgreSQL implementation of the Skill
+    data-access layer
+  - metadata/store/postgres-adapter.ts — new PostgresMetadataStore implementing
+    the IMetadataStore interface
   - patches/fix-*.js / *.cjs / fix-yaml.py / create-db.js — in-container patch
     application scripts
   - deploy/ — service startup and verification scripts
-  - db/schema.sql — PostgreSQL DDL
-  - scripts/ — LangGraph demo chat application
+  - db/schema.sql — PostgreSQL DDL for the storage plane
+  - skill-align/ — Skill module PG-alignment verification suite
+  - scripts/ + example/ — demo applications
 
 The upstream project is distributed under the MIT License; the same notice and
 permission statement are retained in the LICENSE file as required.

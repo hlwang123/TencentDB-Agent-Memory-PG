@@ -179,6 +179,9 @@ SELECT extname, extversion FROM pg_extension WHERE extname IN ('vector', 'pg_trg
 -- 预期: vector | 0.8.2, pg_trgm | 1.6
 ```
 
+> 注：元数据面会在 `tdai_memory` 库内按实例自动建 schema（`tdai_metadata_*`，见 §5.4），
+> 连接账号需对该库有 CREATE 权限（数据库 owner 默认满足）。
+
 ### 3.2 Docker 环境
 
 部署服务器需要安装 Docker。Memory Core 容器通过 Docker 网络访问 PG。
@@ -496,15 +499,17 @@ psql "postgres://postgres:<password>@<pg-host>:5432/tdai_memory" \
 
 ### 8.5 清理元数据面数据
 
-`stop-all.sh --purge` 只删除 Docker volume——存储面 PG 表与元数据面 PG schema 均不受
-影响。如需彻底清空元数据面：
+`stop-all.sh --purge` 会删除 Docker volume 和本地 `deploy/.admin-key`，但**不影响 PG 侧**
+的存储面表和元数据面 schema。元数据面在 PG 时，`--purge` 后**必须同时删除 schema**，
+否则重启后 init-admin 会因旧 admin 仍存在而返回 409、新 key 无法生效：
 
 ```sql
 DROP SCHEMA IF EXISTS tdai_metadata_default CASCADE;
 ```
 
-删除后重启（`start-memory-core.sh`）会重建 schema，但 admin 用户需重新 init——记得同时
-删掉 `deploy/.admin-key`，否则会拿到已失效的旧 key。
+如果只想清空元数据面（不动 volume / admin key），单独执行上面的 DROP 即可：删完重跑
+`start-memory-core.sh`，schema 自动重建，init-admin 会用现有 `.admin-key` 重建 admin 用户
+（key 不变，自愈）。
 
 ---
 

@@ -11,7 +11,8 @@
 #   3. .env 中所有必填参数已填写（非 REPLACE_ME 且非空）
 #   4. 三个镜像是否已在本地（未在本地也不算失败，只 warn）
 #   5. 目标端口是否被占用
-#   6. LLM 上游通路（memory 组 + proxy 组，各自预检）
+#   6. PG 存储可达性（存储面；元数据面配了独立连接串时单独再查）
+#   7. LLM 上游通路（memory 组 + proxy 组，各自预检）
 #      - openai 协议：GET {base}/models，不消耗 token
 #      - anthropic 协议：POST {base}/v1/messages max_tokens=1，消耗 ≤ 10 token
 #      - 若容器已运行，额外 docker exec 从容器内再打一次（验证容器 → LLM 网络可达）
@@ -28,7 +29,7 @@ for arg in "$@"; do
   case "$arg" in
     --skip-llm) SKIP_LLM=1 ;;
     --help|-h)
-      sed -n '2,20p' "$0"
+      sed -n '2,21p' "$0"
       exit 0
       ;;
     *) warn "未知参数: ${arg}（忽略）" ;;
@@ -128,6 +129,33 @@ check_llm_anthropic() {
   esac
 }
 
+# check_pg <label> <connection_string>
+#   TCP 层预检：解析连接串里的 host:port，nc 探活。不通 = error（启动必失败）。
+#   解析失败 / 无 nc = warn 跳过（不阻塞）。
+check_pg() {
+  local label="$1" uri="$2" host="" port=""
+  if [[ "$uri" =~ postgres(ql)?://[^@/]+@([^:/]+)(:([0-9]+))? ]]; then
+    host="${BASH_REMATCH[2]}"
+    port="${BASH_REMATCH[4]:-5432}"
+  else
+    warn "$label：连接串解析不出 host:port，跳过可达性检查"
+    WARNS=$((WARNS+1))
+    return 0
+  fi
+  if ! command -v nc >/dev/null 2>&1; then
+    warn "$label：宿主机无 nc，跳过 PG 可达性检查（$host:$port）"
+    WARNS=$((WARNS+1))
+    return 0
+  fi
+  if nc -z -w 3 "$host" "$port" >/dev/null 2>&1; then
+    ok "$label PG 可达: $host:$port"
+    return 0
+  else
+    echo "${C_RED}[error]${C_RST} $label PG 不可达: $host:$port —— 检查 PG_CONNECTION_STRING / 网络 / 防火墙" >&2
+    return 1
+  fi
+}
+
 # check_llm_group <label> <base_url> <api_key> <model> <protocol>
 check_llm_group() {
   local label="$1" base="$2" key="$3" model="$4" proto="${5:-openai}"
@@ -195,6 +223,7 @@ else
     MEMORY_CORE_IMAGE MEMORY_HUB_IMAGE PROXY_IMAGE \
     MEMORY_CORE_PORT PANEL_PORT KNOWLEDGE_PORT PROXY_PORT \
     MEMORY_CORE_VOLUME PANEL_VOLUME \
+    PG_CONNECTION_STRING \
     MEMORY_LLM_BASE_URL MEMORY_LLM_API_KEY MEMORY_LLM_MODEL \
     KNOWLEDGE_PUBLIC_BASE_URL \
     PROXY_UPSTREAM_URL PROXY_UPSTREAM_API_KEY PROXY_UPSTREAM_MODEL; do
@@ -234,7 +263,23 @@ else
     fi
   done
 
-  # 6. LLM 通路（默认检查，--skip-llm 跳过）
+  # 6. PG 存储可达性（存储面；元数据面默认复用同一连接串）
+  info ""
+  info "═══ PG 存储可达性检查 ═════════════════════════════════════"
+  if ! check_pg "存储面" "$PG_CONNECTION_STRING"; then
+    ERRORS=$((ERRORS+1))
+  fi
+  if [[ -n "${METADATA_PG_CONNECTION_STRING:-}" ]]; then
+    if [[ "$METADATA_PG_CONNECTION_STRING" == "$PG_CONNECTION_STRING" ]]; then
+      ok "元数据面复用存储面连接串，跳过重复检查"
+    elif ! check_pg "元数据面" "$METADATA_PG_CONNECTION_STRING"; then
+      ERRORS=$((ERRORS+1))
+    fi
+  else
+    info "元数据面未配独立连接串（默认复用存储面 PG，或显式空串回退 SQLite）"
+  fi
+
+  # 7. LLM 通路（默认检查，--skip-llm 跳过）
   if (( SKIP_LLM == 1 )); then
     info "跳过 LLM 通路检查（--skip-llm）"
   elif (( ${#MISSING[@]} > 0 )); then

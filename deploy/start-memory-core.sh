@@ -239,7 +239,7 @@ case "$init_resp" in
       ok "admin user 已存在（跳过 init-admin，用 $ADMIN_KEY_FILE 里的 key）"
     else
       warn "admin user 已存在，但 $ADMIN_KEY_FILE 缺失，无法恢复 user_key。"
-      warn "选项 A: 清理 volume 重建 —— ./stop-all.sh --purge && ./start-memory-core.sh"
+      warn "选项 A: 重建 —— 元数据在 PG 时先 DROP SCHEMA（psql -c 'DROP SCHEMA IF EXISTS tdai_metadata_default CASCADE;'），再 ./stop-all.sh --purge && ./start-memory-core.sh"
       warn "选项 B: 手动创建新 admin user_key（需要旧 key 或 gateway apiKey）"
     fi
     ;;

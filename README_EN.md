@@ -190,6 +190,10 @@ SELECT extname, extversion FROM pg_extension WHERE extname IN ('vector', 'pg_trg
 -- Expected: vector | 0.8.2, pg_trgm | 1.6
 ```
 
+> Note: the metadata plane automatically creates per-instance schemas (`tdai_metadata_*`)
+> inside the `tdai_memory` database (see §5.4), so the connecting account needs CREATE
+> privilege on that database (satisfied by default for the database owner).
+
 ### 3.2 Docker
 
 Docker must be installed on the deployment server. The Memory Core container reaches
@@ -524,16 +528,20 @@ Edit `.env` or `start-memory-core.sh`:
 
 ### 8.5 Purging metadata-plane data
 
-`stop-all.sh --purge` only deletes the Docker volume — neither the storage-plane PG tables
-nor the metadata-plane PG schema is affected. To wipe the metadata plane entirely:
+`stop-all.sh --purge` deletes the Docker volume and the local `deploy/.admin-key`, but does
+**not** touch the PG-side storage-plane tables or the metadata-plane schema. With the
+metadata plane on PG, after `--purge` you **must also drop the schema** — otherwise the
+next start fails to recover: init-admin returns 409 because the old admin still exists, and
+the freshly generated key never takes effect:
 
 ```sql
 DROP SCHEMA IF EXISTS tdai_metadata_default CASCADE;
 ```
 
-After the drop, a restart (`start-memory-core.sh`) recreates the schema, but the admin user
-must be re-initialized — remember to also delete `deploy/.admin-key`, otherwise you will be
-left with a stale key.
+If you only want to wipe the metadata plane (leaving the volume / admin key alone), running
+the DROP above by itself is fine: re-run `start-memory-core.sh` afterwards and the schema is
+recreated automatically while init-admin rebuilds the admin user using the existing
+`.admin-key` (same key — it self-heals).
 
 ---
 
