@@ -1,10 +1,14 @@
-# TDAI Memory Core — 全 PostgreSQL 迁移部署文档
+# TencentDB-Agent-Memory-PG
+
+[TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory) 的全 PostgreSQL 迁移与部署工具包
 
 [English](README_EN.md) | 简体中文
 
 > **开源声明**：本仓库是 [TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)（MIT 许可）的
-> PostgreSQL 迁移补丁与部署脚本集合——覆盖存储面、Skill 模块与元数据面，实现
-> 全 PG 部署、无 SQLite 依赖。`src/`、`patches/` 中的部分文件修改自上游源码，
+> 全 PostgreSQL 迁移与部署工具包——补丁全部打在唯一有存储后端的组件 TDAI Memory Core 上
+> （存储面 + Skill 模块 + 元数据面），Memory Hub / Memory Proxy 无自有存储、原样部署；
+> 三件套整体即**完整的 TencentDB-Agent-Memory 全 PG 栈，无 SQLite 依赖**。
+> `src/`、`patches/` 中的部分文件修改自上游源码，
 > 许可与衍生关系说明见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。
 >
 > **上游进展**：本仓库的源码级集成已向上游提交
@@ -24,6 +28,8 @@
 3. **元数据面**（v3 metadata：用户/团队/Agent/资产/ACL 等，含 admin user_key，§5.4）
 
 三者全部落 PG 后即实现**全 PG 部署、无 SQLite 依赖**——数据不再锁死在容器 volume 内，可备份、可高可用、可 SQL 直查。
+
+配套的 Memory Hub（Panel UI）与 Memory Proxy（Claude Code 代理）没有自有存储，原样部署即可——因此对 memory-core 一个组件完成 PG 化，即得到**完整的 TencentDB-Agent-Memory 全 PG 栈**（本仓库部署脚本会拉起全部三件套，见 §4）。
 
 ### 1.1 架构
 

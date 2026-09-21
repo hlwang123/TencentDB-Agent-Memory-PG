@@ -1,14 +1,17 @@
-# TDAI Memory Core — Full-PostgreSQL Migration & Deployment Guide
+# TencentDB-Agent-Memory-PG
+
+Full-PostgreSQL migration & deployment toolkit for [TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
 
 English | [简体中文](README.md)
 
-> **Open-source notice**: This repository is a collection of PostgreSQL migration
-> patches and deployment scripts for
-> [TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
-> (MIT licensed) — covering the storage plane, the Skill module, and the metadata
-> plane for a full-PG deployment with no SQLite dependency. Some files under `src/`
-> and `patches/` are modified from upstream sources — see [LICENSE](LICENSE) and
-> [NOTICE](NOTICE) for licensing and derivation details.
+> **Open-source notice**: this repository is a full-PostgreSQL migration & deployment
+> toolkit for [TencentDB-Agent-Memory](https://github.com/TencentCloud/TencentDB-Agent-Memory)
+> (MIT licensed) — all patches target the TDAI Memory Core, the only component with a
+> storage backend of its own (storage plane + Skill module + metadata plane); Memory
+> Hub / Memory Proxy carry no storage and deploy unmodified. Together the three services
+> form a **complete TencentDB-Agent-Memory stack, full-PG with no SQLite dependency**.
+> Some files under `src/` and `patches/` are modified from upstream sources — see
+> [LICENSE](LICENSE) and [NOTICE](NOTICE) for licensing and derivation details.
 >
 > **Upstream status**: the source-level integration has been submitted upstream as
 > PR [#1387](https://github.com/TencentCloud/TencentDB-Agent-Memory/pull/1387)
@@ -32,6 +35,11 @@ pgvector + tsvector in full, covering three planes:
 With all three on PostgreSQL you get a **full-PG deployment with no SQLite dependency** —
 data is no longer locked inside the container volume: it becomes backupable,
 highly available, and directly queryable via SQL.
+
+The companion Memory Hub (Panel UI) and Memory Proxy (Claude Code proxy) carry no storage
+of their own and deploy unmodified — so PG-enabling the single memory-core component yields
+a **complete full-PG TencentDB-Agent-Memory stack** (the deployment scripts in this repo
+bring up all three services, see §4).
 
 ### 1.1 Architecture
 
