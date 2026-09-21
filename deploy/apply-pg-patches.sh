@@ -6,6 +6,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PATCH_DIR="$SCRIPT_DIR/.memory-core-patches"
+# 优先使用 deploy/.memory-core-patches（本地覆盖），否则直接用仓库 tracked 的 ../patches
+if [[ ! -d "$PATCH_DIR" ]]; then
+  PATCH_DIR="$SCRIPT_DIR/../patches"
+fi
 CONTAINER="${1:-tdai-memory-core}"
 
 echo "[pg-patch] Applying PostgreSQL migration patches to $CONTAINER..."
@@ -25,6 +29,13 @@ docker cp "$PATCH_DIR/server.ts" "$CONTAINER:/app/src/gateway/server.ts"
 # [pg-align] Skill 模块 PG 后端
 docker cp "$PATCH_DIR/pg-skill-store.ts" "$CONTAINER:/app/src/core/skill/pg-skill-store.ts"
 docker cp "$PATCH_DIR/tdai-core.ts" "$CONTAINER:/app/src/core/tdai-core.ts"
+# [pg-metadata] 元数据面（v3 metadata）PG 后端 —— 全 PG 部署（去除 SQLite 依赖）
+docker cp "$PATCH_DIR/pg-metadata-store.ts" "$CONTAINER:/app/src/metadata/store/postgres-adapter.ts"
+docker cp "$PATCH_DIR/metadata-interface.ts" "$CONTAINER:/app/src/metadata/store/interface.ts"
+docker cp "$PATCH_DIR/metadata-db-name.ts" "$CONTAINER:/app/src/metadata/store/db-name.ts"
+docker cp "$PATCH_DIR/metadata-factory.ts" "$CONTAINER:/app/src/metadata/store/factory.ts"
+docker cp "$PATCH_DIR/metadata-relation-id-insert.ts" "$CONTAINER:/app/src/metadata/store/relation-id-insert.ts"
+docker cp "$PATCH_DIR/gateway-metadata-env.ts" "$CONTAINER:/app/src/gateway/metadata-env.ts"
 
 # 3. 重启容器使补丁生效
 echo "[pg-patch] Restarting container..."
