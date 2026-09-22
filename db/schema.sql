@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS l0_conversations (
   message_segmented text NOT NULL DEFAULT ''::text,
   recorded_at text NOT NULL DEFAULT ''::text,
   timestamp bigint NOT NULL DEFAULT 0,
-  embedding USER-DEFINED,
+  embedding vector(1024),
   message_tsv tsvector
 );
 
@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS l1_records (
   created_time text NOT NULL DEFAULT ''::text,
   updated_time text NOT NULL DEFAULT ''::text,
   metadata_json text NOT NULL DEFAULT '{}'::text,
-  embedding USER-DEFINED,
+  embedding vector(1024),
   content_tsv tsvector
 );
 

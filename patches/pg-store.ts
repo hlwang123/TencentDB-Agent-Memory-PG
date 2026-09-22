@@ -204,7 +204,7 @@ export class PgMemoryStore implements IMemoryStore {
   async deleteL1(recordId: string, filter?: IsolationFilter): Promise<boolean> {
     if (this.degraded) return false;
     try {
-      if (filter) { const r = await this.pool.query("SELECT user_id, agent_id, session_id, session_key FROM l1_records WHERE record_id = $1", [recordId]); if (r.rows.length === 0 || !rowMatchesIsolation(r.rows[0], filter)) return false; }
+      if (filter) { const r = await this.pool.query("SELECT team_id, user_id, agent_id, session_id, task_id, session_key FROM l1_records WHERE record_id = $1", [recordId]); if (r.rows.length === 0 || !rowMatchesIsolation(r.rows[0], filter)) return false; }
       const r = await this.pool.query("DELETE FROM l1_records WHERE record_id = $1", [recordId]);
       return (r.rowCount ?? 0) > 0;
     } catch { return false; }
@@ -218,7 +218,7 @@ export class PgMemoryStore implements IMemoryStore {
       try {
         await client.query("BEGIN");
         for (const id of recordIds) {
-          if (filter) { const r = await client.query("SELECT user_id, agent_id, session_id, session_key FROM l1_records WHERE record_id = $1", [id]); if (r.rows.length === 0 || !rowMatchesIsolation(r.rows[0], filter)) continue; }
+          if (filter) { const r = await client.query("SELECT team_id, user_id, agent_id, session_id, task_id, session_key FROM l1_records WHERE record_id = $1", [id]); if (r.rows.length === 0 || !rowMatchesIsolation(r.rows[0], filter)) continue; }
           await client.query("DELETE FROM l1_records WHERE record_id = $1", [id]);
         }
         await client.query("COMMIT");

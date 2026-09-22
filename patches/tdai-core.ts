@@ -888,15 +888,26 @@ export class TdaiCore {
         skillStore = sqliteStore;
       } else if (typeof pgCarrier.getPgPool === "function") {
         const { pool, dimensions } = pgCarrier.getPgPool()!;
+        // [pg-align] 注入文本嵌入函数（对齐 TCVDB 云后端的服务端 embedding 语义）：
+        // 复用核心记忆面（L0/L1）的 EmbeddingService；维度一致才注入，未配置
+        // embedding provider 时不注入 —— skill 向量检索自动降级 bm25。
+        const embedService = this.embeddingService;
+        const embedFn =
+          embedService && embedService.getDimensions() > 0 && embedService.getDimensions() === dimensions
+            ? (text: string) => embedService.embed(text)
+            : undefined;
         const pgStore = new PgSkillStore({
           pool: pool as import("pg").Pool,
           dimensions,
           logger: this.logger,
+          embed: embedFn,
         });
         pgStore.init();
+        // 存量回填：老部署的 head skill 异步补向量（有界、幂等、失败仅 warn）
+        void pgStore.backfillEmbeddings().catch(() => {});
         skillStore = pgStore;
         this.logger.info(
-          `${TAG} [pg-align] Skill store backend: PgSkillStore (dimensions=${dimensions})`,
+          `${TAG} [pg-align] Skill store backend: PgSkillStore (dimensions=${dimensions}, embedding=${embedFn ? "on" : "off"})`,
         );
       } else {
         this.logger.warn(

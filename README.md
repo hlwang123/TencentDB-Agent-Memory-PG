@@ -299,7 +299,7 @@ Skill wiring（日志 `Skill wiring skipped`）。
 |----|-----------|---------------------------|
 | 逃生舱 | `getRawDb()` → `DatabaseSync` | `PgMemoryStore.getPgPool()` → 共享同一 `pg.Pool` + 维度 |
 | 全文检索 | FTS5 | `skills.fts_segmented`（jieba 预分词）+ `fts_tsv` 生成列 + GIN（随行更新自动维护） |
-| 向量检索 | vec0 虚拟表 | 独立表 `skill_vec(skill_id PK, embedding vector(dim))` + IVFFlat cosine；并实现 embedding / hybrid(RRF) 检索路径 |
+| 向量检索 | vec0 虚拟表 | 独立表 `skill_vec(skill_id PK, embedding vector(dim))` + IVFFlat cosine；embedding / hybrid(RRF) 检索路径**已接线**（对齐 TCVDB 云后端的服务端 embedding 语义：写入侧 `appendVersion` 异步重算 head 向量、查询侧就地计算查询向量、启动时存量回填）——配置 embedding provider 时可用（含中英跨语言语义检索），未配置时降级 bm25（与 SQLite/MongoDB 后端一致） |
 | 写串行化 | `BEGIN IMMEDIATE` 全库串行 | 事务级 advisory lock（`pg_advisory_xact_lock(hashtext(skill_id))`）按 skill_id 串行 |
 | 时间戳 | INTEGER ms | BIGINT（`Date.now()` 超 int4），读回 `Number()` |
 | DDL | 同步建表 | `init()` 异步 DDL，方法内部 `await readyPromise`，DDL 完成前请求排队 |
@@ -308,8 +308,12 @@ Skill wiring（日志 `Skill wiring skipped`）。
 `skill_vec` 向量表），无需手工执行 DDL。启动成功的标志日志：
 
 ```
-[memory-tdai] [pg-align] Skill store backend: PgSkillStore (dimensions=1024)
+[memory-tdai] [pg-align] Skill store backend: PgSkillStore (dimensions=1024, embedding=on)
 ```
+
+（`embedding=on` 表示已注入 embedding 函数；未配置 embedding provider 时为 `embedding=off`，
+检索降级 bm25。配置 provider 后，启动时还会自动为无向量的存量 skill 回填：
+`[pg-skill-store] backfilled embeddings for N skill(s)`。）
 
 全链路验证脚本见 `skill-align/`（`skill-e2e.sh`：CRUD/版本/中英文 BM25 检索/重名冲突/物理
 删除 + PG 表结构校验；`skill-extract-e2e.sh`：对话 → LLM 提取 skill）。

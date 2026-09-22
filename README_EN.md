@@ -317,7 +317,7 @@ The alignment approach (no intrusion into upstream interfaces):
 |--------|----------------|-------------------------------|
 | Escape hatch | `getRawDb()` → `DatabaseSync` | `PgMemoryStore.getPgPool()` → shares the same `pg.Pool` + dimensions |
 | Full-text search | FTS5 | `skills.fts_segmented` (jieba-presegmented) + `fts_tsv` generated column + GIN (auto-maintained on row updates) |
-| Vector search | vec0 virtual table | separate table `skill_vec(skill_id PK, embedding vector(dim))` + IVFFlat cosine; also implements embedding / hybrid (RRF) retrieval paths |
+| Vector search | vec0 virtual table | separate table `skill_vec(skill_id PK, embedding vector(dim))` + IVFFlat cosine; embedding / hybrid (RRF) retrieval paths are **wired up** (mirroring the server-side embedding semantics of the TCVDB cloud backend: `appendVersion` re-embeds the head asynchronously on write, queries embed on the fly, and existing rows are backfilled at startup) — available when an embedding provider is configured (including cross-language CN/EN semantic search), otherwise falls back to bm25 (same as the SQLite/MongoDB backends) |
 | Write serialization | `BEGIN IMMEDIATE` (whole-DB) | transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtext(skill_id))`), serialized per skill_id |
 | Timestamps | INTEGER ms | BIGINT (`Date.now()` exceeds int4); converted back with `Number()` |
 | DDL | synchronous table creation | async DDL in `init()`; methods `await readyPromise` so requests queue until DDL completes |
@@ -327,8 +327,13 @@ Tables are created automatically by `PgSkillStore.init()` (`skills` — multi-ve
 on startup:
 
 ```
-[memory-tdai] [pg-align] Skill store backend: PgSkillStore (dimensions=1024)
+[memory-tdai] [pg-align] Skill store backend: PgSkillStore (dimensions=1024, embedding=on)
 ```
+
+(`embedding=on` means an embedding function was injected; without an embedding provider it reads
+`embedding=off` and search falls back to bm25. With a provider configured, existing skills without
+vectors are also backfilled automatically at startup:
+`[pg-skill-store] backfilled embeddings for N skill(s)`.)
 
 End-to-end verification scripts live in `skill-align/` (`skill-e2e.sh`: CRUD/versioning/Chinese+
 English BM25 search/duplicate-name conflict/physical delete + PG table checks;
