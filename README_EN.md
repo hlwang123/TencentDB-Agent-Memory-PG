@@ -317,7 +317,7 @@ The alignment approach (no intrusion into upstream interfaces):
 |--------|----------------|-------------------------------|
 | Escape hatch | `getRawDb()` → `DatabaseSync` | `PgMemoryStore.getPgPool()` → shares the same `pg.Pool` + dimensions |
 | Full-text search | FTS5 | `skills.fts_segmented` (jieba-presegmented) + `fts_tsv` generated column + GIN (auto-maintained on row updates) |
-| Vector search | vec0 virtual table | separate table `skill_vec(skill_id PK, embedding vector(dim))` + IVFFlat cosine; also implements embedding / hybrid (RRF) retrieval paths |
+| Vector search | vec0 virtual table | separate table `skill_vec(skill_id PK, embedding vector(dim))` + IVFFlat cosine; embedding / hybrid (RRF) retrieval paths are implemented, but the stock container wiring never passes a query embedding, so at runtime both backends **downgrade to bm25** (log `has_embedding=false`) |
 | Write serialization | `BEGIN IMMEDIATE` (whole-DB) | transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtext(skill_id))`), serialized per skill_id |
 | Timestamps | INTEGER ms | BIGINT (`Date.now()` exceeds int4); converted back with `Number()` |
 | DDL | synchronous table creation | async DDL in `init()`; methods `await readyPromise` so requests queue until DDL completes |

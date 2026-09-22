@@ -299,7 +299,7 @@ Skill wiring（日志 `Skill wiring skipped`）。
 |----|-----------|---------------------------|
 | 逃生舱 | `getRawDb()` → `DatabaseSync` | `PgMemoryStore.getPgPool()` → 共享同一 `pg.Pool` + 维度 |
 | 全文检索 | FTS5 | `skills.fts_segmented`（jieba 预分词）+ `fts_tsv` 生成列 + GIN（随行更新自动维护） |
-| 向量检索 | vec0 虚拟表 | 独立表 `skill_vec(skill_id PK, embedding vector(dim))` + IVFFlat cosine；并实现 embedding / hybrid(RRF) 检索路径 |
+| 向量检索 | vec0 虚拟表 | 独立表 `skill_vec(skill_id PK, embedding vector(dim))` + IVFFlat cosine；embedding / hybrid(RRF) 检索路径已实现，但当前官方容器的 wiring 不传查询向量，运行时与 SQLite 版一致**实际降级为 bm25**（日志 `has_embedding=false`） |
 | 写串行化 | `BEGIN IMMEDIATE` 全库串行 | 事务级 advisory lock（`pg_advisory_xact_lock(hashtext(skill_id))`）按 skill_id 串行 |
 | 时间戳 | INTEGER ms | BIGINT（`Date.now()` 超 int4），读回 `Number()` |
 | DDL | 同步建表 | `init()` 异步 DDL，方法内部 `await readyPromise`，DDL 完成前请求排队 |
